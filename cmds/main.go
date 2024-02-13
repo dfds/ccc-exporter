@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/gofiber/adaptor/v2"
 	"github.com/gofiber/fiber/v2"
@@ -9,6 +10,7 @@ import (
 	"go.dfds.cloud/ccc-exporter/conf"
 	"go.dfds.cloud/ccc-exporter/internal/client"
 	"go.dfds.cloud/ccc-exporter/internal/metrics"
+	"log"
 	"time"
 )
 
@@ -41,7 +43,13 @@ func worker() {
 
 		promClient := client.NewClient(config.Prometheus.Endpoint)
 		gatherer := metrics.NewGatherer(promClient)
-		gatherer.GetAllMetrics()
+		data := gatherer.GetAllMetrics()
+		serialised, err := json.Marshal(data)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		fmt.Println(string(serialised))
 
 		fmt.Println("New SSO metrics published")
 		time.Sleep(sleepInterval)
