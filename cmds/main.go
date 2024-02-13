@@ -51,7 +51,7 @@ func worker() {
 
 		fmt.Println(string(serialised))
 
-		fmt.Println("New SSO metrics published")
+		fmt.Println("New metrics published")
 		time.Sleep(sleepInterval)
 	}
 }
