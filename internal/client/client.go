@@ -21,6 +21,7 @@ func NewClient(endpoint string) *Client {
 }
 
 func (c *Client) Query(query string, time float64) (*QueryResponse, error) {
+	//req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/v1/query_range", c.endpoint), nil)
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/v1/query", c.endpoint), nil)
 	if err != nil {
 		return nil, err
@@ -29,7 +30,11 @@ func (c *Client) Query(query string, time float64) (*QueryResponse, error) {
 	queryValues := req.URL.Query()
 	queryValues.Set("query", query)
 	queryValues.Set("time", fmt.Sprintf("%f", time))
+	//queryValues.Set("start", "1704110693")
+	//queryValues.Set("end", "1709250693")
+	//queryValues.Set("step", "1d")
 	req.URL.RawQuery = queryValues.Encode()
+	fmt.Println(req.URL.String())
 
 	resp, err := c.http.Do(req)
 	if err != nil {

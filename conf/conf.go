@@ -1,6 +1,11 @@
 package conf
 
-import "github.com/kelseyhightower/envconfig"
+import (
+	"encoding/json"
+	"github.com/kelseyhightower/envconfig"
+	"log"
+	"os"
+)
 
 type Config struct {
 	WorkerInterval int `json:"workerInterval"`
@@ -20,4 +25,32 @@ func LoadConfig() (Config, error) {
 	}
 
 	return conf, err
+}
+
+type Data struct {
+	Pricing struct {
+		Prod struct {
+			NetworkTransfer float64 `json:"networkTransfer"`
+			Storage         float64 `json:"storage"`
+		} `json:"prod"`
+		Dev struct {
+			NetworkTransfer float64 `json:"networkTransfer"`
+			Storage         float64 `json:"storage"`
+		} `json:"dev"`
+	}
+}
+
+func LoadData() Data {
+	data, err := os.ReadFile("data.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var payload Data
+	err = json.Unmarshal(data, &payload)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return payload
 }

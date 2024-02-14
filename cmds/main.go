@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/gofiber/adaptor/v2"
 	"github.com/gofiber/fiber/v2"
@@ -9,6 +10,7 @@ import (
 	"go.dfds.cloud/ccc-exporter/conf"
 	"go.dfds.cloud/ccc-exporter/internal/client"
 	"go.dfds.cloud/ccc-exporter/internal/metrics"
+	"log"
 	"time"
 )
 
@@ -42,14 +44,29 @@ func worker() {
 		promClient := client.NewClient(config.Prometheus.Endpoint)
 		gatherer := metrics.NewGatherer(promClient)
 		data := gatherer.GetAllMetrics()
-		//serialised, err := json.Marshal(data)
-		//if err != nil {
-		//	log.Fatal(err)
-		//}
-		//
-		//fmt.Println(string(serialised))
 
-		metrics.GetTotalCostsByCapability(data)
+		metricsByCaps := metrics.ByCapability(data)
+
+		pricingData := conf.LoadData()
+
+		pricingProd := metrics.Pricing{
+			NetworkTransfer: pricingData.Pricing.Prod.NetworkTransfer,
+			Storage:         pricingData.Pricing.Prod.Storage,
+		}
+
+		pricingDev := metrics.Pricing{
+			NetworkTransfer: pricingData.Pricing.Dev.NetworkTransfer,
+			Storage:         pricingData.Pricing.Dev.Storage,
+		}
+
+		csvData := metrics.CapabilityResponseToCostCsv(metricsByCaps, pricingProd, pricingDev)
+
+		serialised, err := json.Marshal(csvData)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		fmt.Println(string(serialised))
 
 		fmt.Println("New metrics published")
 		time.Sleep(sleepInterval)

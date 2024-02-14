@@ -53,7 +53,7 @@ func (g *Gatherer) GetAllMetrics() *AllMetricsResponse {
 				query = fmt.Sprintf("%s offset %dd)", baseQuery, i)
 				timestamp = now.Add(time.Duration(i*24) * -time.Hour)
 				if metricKey == ConfluentKafkaServerRetainedBytes {
-					query = fmt.Sprintf("%s offset %dd)", ConfluentKafkaServerRetainedBytes, i)
+					query = fmt.Sprintf("%s offset %dd", ConfluentKafkaServerRetainedBytes, i)
 				}
 			} else {
 				query = fmt.Sprintf("%s)", query)
