@@ -18,6 +18,8 @@ func NewGatherer(client *client.Client) *Gatherer {
 
 type MetricKey string
 type ClusterId string
+type CapabilityId string
+type TopicName string
 
 type MetricData struct {
 	Time  float64
@@ -50,8 +52,14 @@ func (g *Gatherer) GetAllMetrics() *AllMetricsResponse {
 			if i != 0 {
 				query = fmt.Sprintf("%s offset %dd)", baseQuery, i)
 				timestamp = now.Add(time.Duration(i*24) * -time.Hour)
+				if metricKey == ConfluentKafkaServerRetainedBytes {
+					query = fmt.Sprintf("%s offset %dd)", ConfluentKafkaServerRetainedBytes, i)
+				}
 			} else {
 				query = fmt.Sprintf("%s)", query)
+				if metricKey == ConfluentKafkaServerRetainedBytes {
+					query = fmt.Sprintf("%s offset 1d", ConfluentKafkaServerRetainedBytes) // not perfect, WIP
+				}
 			}
 
 			fmt.Println(query)
@@ -83,7 +91,15 @@ func (g *Gatherer) GetAllMetrics() *AllMetricsResponse {
 					Time:  float64(timestamp.Unix()),
 					Value: f64,
 				})
-				dataStore30Days[metricKey][ClusterId(vector.Metric.KafkaID)][vector.Metric.Topic] = dataStore30Days[metricKey][ClusterId(vector.Metric.KafkaID)][vector.Metric.Topic] + f64
+
+				if metricKey == ConfluentKafkaServerRetainedBytes {
+					if i == 0 {
+						dataStore30Days[metricKey][ClusterId(vector.Metric.KafkaID)][vector.Metric.Topic] = f64
+					}
+				} else {
+					dataStore30Days[metricKey][ClusterId(vector.Metric.KafkaID)][vector.Metric.Topic] = dataStore30Days[metricKey][ClusterId(vector.Metric.KafkaID)][vector.Metric.Topic] + f64
+				}
+
 			}
 		}
 	}
