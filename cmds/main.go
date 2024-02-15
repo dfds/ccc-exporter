@@ -47,25 +47,6 @@ func worker() {
 
 		metricsByCaps := metrics.ByCapability(data)
 
-		dataSum := 0.0
-		keyCount := 0
-
-		for _, next := range metricsByCaps {
-			keyCount = keyCount + 1
-			for _, next2 := range next {
-				keyCount = keyCount + 1
-				for metricKey, val := range next2 {
-					keyCount = keyCount + 1
-					if metricKey == metrics.ConfluentKafkaServerRetainedBytes {
-						dataSum = dataSum + (val / 1024 / 1024 / 1024)
-					}
-				}
-			}
-		}
-
-		fmt.Printf("Main::metricsByCaps end sum: %f\n", dataSum)
-		fmt.Printf("Main:: keyCount: %d\n", keyCount)
-
 		pricingData := conf.LoadData()
 
 		pricingProd := metrics.Pricing{

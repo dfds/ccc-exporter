@@ -7,7 +7,10 @@ import (
 	"strconv"
 )
 
-type ByCapabilityResponse map[CapabilityId]map[ClusterId]map[MetricKey]float64
+type ByCapabilityResponse struct {
+	DaysTotal      map[CapabilityId]map[ClusterId]map[MetricKey]float64
+	DaysTopicTotal map[CapabilityId]map[ClusterId]map[TopicName]map[MetricKey]float64
+}
 
 func ByCapability(allMetrics *AllMetricsResponse) ByCapabilityResponse {
 	pattern, err := regexp.Compile("(pub.)?(.*-.{5})\\.")
@@ -15,7 +18,10 @@ func ByCapability(allMetrics *AllMetricsResponse) ByCapabilityResponse {
 		log.Fatal(err)
 	}
 
-	data := make(map[CapabilityId]map[ClusterId]map[MetricKey]float64)
+	payload := ByCapabilityResponse{}
+
+	daysTotal := make(map[CapabilityId]map[ClusterId]map[MetricKey]float64)
+	daysTopicTotal := make(map[CapabilityId]map[ClusterId]map[TopicName]map[MetricKey]float64)
 
 	for metricKey, v := range allMetrics.Days30 {
 		for clusterId, vv := range v {
@@ -24,35 +30,62 @@ func ByCapability(allMetrics *AllMetricsResponse) ByCapabilityResponse {
 
 				if len(capabilityRootId) > 2 { // matching pattern of Capability rootid
 					// Check that map exists
-					if _, ok := data[CapabilityId(capabilityRootId[2])]; !ok {
-						data[CapabilityId(capabilityRootId[2])] = make(map[ClusterId]map[MetricKey]float64)
+					if _, ok := daysTotal[CapabilityId(capabilityRootId[2])]; !ok {
+						daysTotal[CapabilityId(capabilityRootId[2])] = make(map[ClusterId]map[MetricKey]float64)
 					}
-					if _, ok := data[CapabilityId(capabilityRootId[2])][clusterId]; !ok {
-						data[CapabilityId(capabilityRootId[2])][clusterId] = make(map[MetricKey]float64)
+					if _, ok := daysTotal[CapabilityId(capabilityRootId[2])][clusterId]; !ok {
+						daysTotal[CapabilityId(capabilityRootId[2])][clusterId] = make(map[MetricKey]float64)
+					}
+					if _, ok := daysTopicTotal[CapabilityId(capabilityRootId[2])]; !ok {
+						daysTopicTotal[CapabilityId(capabilityRootId[2])] = make(map[ClusterId]map[TopicName]map[MetricKey]float64)
+					}
+					if _, ok := daysTopicTotal[CapabilityId(capabilityRootId[2])][clusterId]; !ok {
+						daysTopicTotal[CapabilityId(capabilityRootId[2])][clusterId] = make(map[TopicName]map[MetricKey]float64)
+					}
+					if _, ok := daysTopicTotal[CapabilityId(capabilityRootId[2])][clusterId][TopicName(topic)]; !ok {
+						daysTopicTotal[CapabilityId(capabilityRootId[2])][clusterId][TopicName(topic)] = make(map[MetricKey]float64)
 					}
 
 					// check if key exists
-					if _, ok := data[CapabilityId(capabilityRootId[2])][clusterId][metricKey]; ok {
-						data[CapabilityId(capabilityRootId[2])][clusterId][metricKey] = data[CapabilityId(capabilityRootId[2])][clusterId][metricKey] + value
+					if _, ok := daysTotal[CapabilityId(capabilityRootId[2])][clusterId][metricKey]; ok {
+						daysTotal[CapabilityId(capabilityRootId[2])][clusterId][metricKey] = daysTotal[CapabilityId(capabilityRootId[2])][clusterId][metricKey] + value
 					} else {
-						data[CapabilityId(capabilityRootId[2])][clusterId][metricKey] = value
+						daysTotal[CapabilityId(capabilityRootId[2])][clusterId][metricKey] = value
+					}
+					if _, ok := daysTopicTotal[CapabilityId(capabilityRootId[2])][clusterId][TopicName(topic)][metricKey]; ok {
+						daysTopicTotal[CapabilityId(capabilityRootId[2])][clusterId][TopicName(topic)][metricKey] = daysTopicTotal[CapabilityId(capabilityRootId[2])][clusterId][TopicName(topic)][metricKey] + value
+					} else {
+						daysTopicTotal[CapabilityId(capabilityRootId[2])][clusterId][TopicName(topic)][metricKey] = value
 					}
 
 				} else { // everything else
 					id := CapabilityId(fmt.Sprintf("unknown-%s", topic))
-					if _, ok := data[id]; !ok {
-						data[id] = make(map[ClusterId]map[MetricKey]float64)
+					if _, ok := daysTotal[id]; !ok {
+						daysTotal[id] = make(map[ClusterId]map[MetricKey]float64)
 					}
-					if _, ok := data[id][clusterId]; !ok {
-						data[id][clusterId] = make(map[MetricKey]float64)
+					if _, ok := daysTotal[id][clusterId]; !ok {
+						daysTotal[id][clusterId] = make(map[MetricKey]float64)
 					}
-					data[id][clusterId][metricKey] = value
+					if _, ok := daysTopicTotal[id]; !ok {
+						daysTopicTotal[id] = make(map[ClusterId]map[TopicName]map[MetricKey]float64)
+					}
+					if _, ok := daysTopicTotal[id][clusterId]; !ok {
+						daysTopicTotal[id][clusterId] = make(map[TopicName]map[MetricKey]float64)
+					}
+					if _, ok := daysTopicTotal[id][clusterId][TopicName(topic)]; !ok {
+						daysTopicTotal[id][clusterId][TopicName(topic)] = make(map[MetricKey]float64)
+					}
+
+					daysTotal[id][clusterId][metricKey] = value
+					daysTopicTotal[id][clusterId][TopicName(topic)][metricKey] = value
 				}
 			}
 		}
 	}
 
-	return data
+	payload.DaysTotal = daysTotal
+
+	return payload
 }
 
 type CapabilityCostContainer struct {
@@ -95,7 +128,7 @@ func CapabilityResponseToCostCsv(data ByCapabilityResponse, pricingProd Pricing,
 
 	sum := 0.0
 
-	for capabilityId, clusterMap := range data {
+	for capabilityId, clusterMap := range data.DaysTotal {
 		capabilityPayload[capabilityId] = CapabilityCostContainer{
 			map[ClusterId]*Cluster{},
 		}
