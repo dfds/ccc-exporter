@@ -21,6 +21,7 @@ func ByCapability(allMetrics *AllMetricsResponse) ByCapabilityResponse {
 		for clusterId, vv := range v {
 			for topic, value := range vv {
 				capabilityRootId := pattern.FindStringSubmatch(topic)
+
 				if len(capabilityRootId) > 2 { // matching pattern of Capability rootid
 					// Check that map exists
 					if _, ok := data[CapabilityId(capabilityRootId[2])]; !ok {
@@ -30,7 +31,13 @@ func ByCapability(allMetrics *AllMetricsResponse) ByCapabilityResponse {
 						data[CapabilityId(capabilityRootId[2])][clusterId] = make(map[MetricKey]float64)
 					}
 
-					data[CapabilityId(capabilityRootId[2])][clusterId][metricKey] = value
+					// check if key exists
+					if _, ok := data[CapabilityId(capabilityRootId[2])][clusterId][metricKey]; ok {
+						data[CapabilityId(capabilityRootId[2])][clusterId][metricKey] = data[CapabilityId(capabilityRootId[2])][clusterId][metricKey] + value
+					} else {
+						data[CapabilityId(capabilityRootId[2])][clusterId][metricKey] = value
+					}
+
 				} else { // everything else
 					id := CapabilityId(fmt.Sprintf("unknown-%s", topic))
 					if _, ok := data[id]; !ok {
@@ -86,6 +93,8 @@ func CapabilityResponseToCostCsv(data ByCapabilityResponse, pricingProd Pricing,
 	payload := CapabilityResponseToCostCsvResponse{}
 	capabilityPayload := map[CapabilityId]CapabilityCostContainer{}
 
+	sum := 0.0
+
 	for capabilityId, clusterMap := range data {
 		capabilityPayload[capabilityId] = CapabilityCostContainer{
 			map[ClusterId]*Cluster{},
@@ -105,6 +114,10 @@ func CapabilityResponseToCostCsv(data ByCapabilityResponse, pricingProd Pricing,
 				Metrics: map[MetricKey]*MetricCost{},
 			}
 			for metricKey, metricValue := range metricMap {
+				if metricKey == ConfluentKafkaServerRetainedBytes {
+					//fmt.Printf("%s-%s-%f\n", capabilityId, clusterId, metricValue)
+					sum = sum + metricValue
+				}
 				capabilityPayload[capabilityId].Clusters[clusterId].Metrics[metricKey] = &MetricCost{
 					MetricValue: metricValue,
 				}
@@ -131,6 +144,9 @@ func CapabilityResponseToCostCsv(data ByCapabilityResponse, pricingProd Pricing,
 
 	payload.CostByCapability = capabilityPayload
 	payload.TotalStorageCost = payload.TotalStorageCost * 24 * 30
+
+	fmt.Printf("CapabilityResponseToCostCsv end TotalStorage: %f\n", payload.TotalStorage)
+	fmt.Printf("CapabilityResponseToCostCsv end sum: %f\n", sum)
 
 	return payload
 }

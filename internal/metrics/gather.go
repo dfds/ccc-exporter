@@ -58,7 +58,7 @@ func (g *Gatherer) GetAllMetrics() *AllMetricsResponse {
 			} else {
 				query = fmt.Sprintf("%s)", query)
 				if metricKey == ConfluentKafkaServerRetainedBytes {
-					query = fmt.Sprintf("%s offset 1d", ConfluentKafkaServerRetainedBytes) // not perfect, WIP
+					query = fmt.Sprintf("%s offset 1h", ConfluentKafkaServerRetainedBytes) // not perfect, WIP
 				}
 			}
 
