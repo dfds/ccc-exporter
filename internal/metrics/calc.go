@@ -84,6 +84,7 @@ func ByCapability(allMetrics *AllMetricsResponse) ByCapabilityResponse {
 	}
 
 	payload.DaysTotal = daysTotal
+	payload.DaysTopicTotal = daysTopicTotal
 
 	return payload
 }
@@ -93,8 +94,9 @@ type CapabilityCostContainer struct {
 }
 
 type Cluster struct {
-	Id      string
-	Metrics map[MetricKey]*MetricCost
+	Id            string
+	MetricsTotal  map[MetricKey]*MetricCost
+	MetricsTopics map[TopicName]map[MetricKey]*MetricCost
 }
 
 type MetricCost struct {
@@ -110,11 +112,11 @@ func Float64ToMetricCostFloat(val float64) MetricCostFloat {
 }
 
 type CapabilityResponseToCostCsvResponse struct {
-	CostByCapability  map[CapabilityId]CapabilityCostContainer
-	TotalTransferCost float64
-	TotalStorageCost  float64
-	TotalStorage      float64
-	TotalTransfer     float64
+	TotalCostByCapability map[CapabilityId]CapabilityCostContainer
+	TotalTransferCost     float64
+	TotalStorageCost      float64
+	TotalStorage          float64
+	TotalTransfer         float64
 }
 
 func CapabilityResponseToCostCsv(data ByCapabilityResponse, pricingProd Pricing, pricingDev Pricing) CapabilityResponseToCostCsvResponse {
@@ -125,8 +127,6 @@ func CapabilityResponseToCostCsv(data ByCapabilityResponse, pricingProd Pricing,
 
 	payload := CapabilityResponseToCostCsvResponse{}
 	capabilityPayload := map[CapabilityId]CapabilityCostContainer{}
-
-	sum := 0.0
 
 	for capabilityId, clusterMap := range data.DaysTotal {
 		capabilityPayload[capabilityId] = CapabilityCostContainer{
@@ -143,43 +143,66 @@ func CapabilityResponseToCostCsv(data ByCapabilityResponse, pricingProd Pricing,
 				networkTransferCost = networkTransferDev
 			}
 			capabilityPayload[capabilityId].Clusters[clusterId] = &Cluster{
-				Id:      string(clusterId),
-				Metrics: map[MetricKey]*MetricCost{},
+				Id:            string(clusterId),
+				MetricsTotal:  map[MetricKey]*MetricCost{},
+				MetricsTopics: map[TopicName]map[MetricKey]*MetricCost{},
 			}
 			for metricKey, metricValue := range metricMap {
-				if metricKey == ConfluentKafkaServerRetainedBytes {
-					//fmt.Printf("%s-%s-%f\n", capabilityId, clusterId, metricValue)
-					sum = sum + metricValue
-				}
-				capabilityPayload[capabilityId].Clusters[clusterId].Metrics[metricKey] = &MetricCost{
+				capabilityPayload[capabilityId].Clusters[clusterId].MetricsTotal[metricKey] = &MetricCost{
 					MetricValue: metricValue,
 				}
 
 				switch metricKey {
 				case ConfluentKafkaServerRetainedBytes:
-					capabilityPayload[capabilityId].Clusters[clusterId].Metrics[metricKey].CostValue = Float64ToMetricCostFloat(capabilityPayload[capabilityId].Clusters[clusterId].Metrics[metricKey].MetricValue * retentionCost)
-					payload.TotalStorageCost = payload.TotalStorageCost + float64(capabilityPayload[capabilityId].Clusters[clusterId].Metrics[metricKey].CostValue)
+					capabilityPayload[capabilityId].Clusters[clusterId].MetricsTotal[metricKey].CostValue = Float64ToMetricCostFloat(capabilityPayload[capabilityId].Clusters[clusterId].MetricsTotal[metricKey].MetricValue * retentionCost)
+					payload.TotalStorageCost = payload.TotalStorageCost + float64(capabilityPayload[capabilityId].Clusters[clusterId].MetricsTotal[metricKey].CostValue)
 					payload.TotalStorage = payload.TotalStorage + (metricValue / 1024 / 1024 / 1024)
 				case ConfluentKafkaServerReceivedBytes:
-					capabilityPayload[capabilityId].Clusters[clusterId].Metrics[metricKey].CostValue = Float64ToMetricCostFloat(capabilityPayload[capabilityId].Clusters[clusterId].Metrics[metricKey].MetricValue * networkTransferCost)
-					payload.TotalTransferCost = payload.TotalTransferCost + float64(capabilityPayload[capabilityId].Clusters[clusterId].Metrics[metricKey].CostValue)
+					capabilityPayload[capabilityId].Clusters[clusterId].MetricsTotal[metricKey].CostValue = Float64ToMetricCostFloat(capabilityPayload[capabilityId].Clusters[clusterId].MetricsTotal[metricKey].MetricValue * networkTransferCost)
+					payload.TotalTransferCost = payload.TotalTransferCost + float64(capabilityPayload[capabilityId].Clusters[clusterId].MetricsTotal[metricKey].CostValue)
 					payload.TotalTransfer = payload.TotalTransfer + (metricValue / 1024 / 1024 / 1024)
 				case ConfluentKafkaServerSentBytes:
-					capabilityPayload[capabilityId].Clusters[clusterId].Metrics[metricKey].CostValue = Float64ToMetricCostFloat(capabilityPayload[capabilityId].Clusters[clusterId].Metrics[metricKey].MetricValue * networkTransferCost)
-					payload.TotalTransferCost = payload.TotalTransferCost + float64(capabilityPayload[capabilityId].Clusters[clusterId].Metrics[metricKey].CostValue)
+					capabilityPayload[capabilityId].Clusters[clusterId].MetricsTotal[metricKey].CostValue = Float64ToMetricCostFloat(capabilityPayload[capabilityId].Clusters[clusterId].MetricsTotal[metricKey].MetricValue * networkTransferCost)
+					payload.TotalTransferCost = payload.TotalTransferCost + float64(capabilityPayload[capabilityId].Clusters[clusterId].MetricsTotal[metricKey].CostValue)
 					payload.TotalTransfer = payload.TotalTransfer + (metricValue / 1024 / 1024 / 1024)
 				default:
-					capabilityPayload[capabilityId].Clusters[clusterId].Metrics[metricKey].CostValue = 0.0
+					capabilityPayload[capabilityId].Clusters[clusterId].MetricsTotal[metricKey].CostValue = 0.0
 				}
 			}
 		}
 	}
 
-	payload.CostByCapability = capabilityPayload
+	for capabilityId, clusterMap := range data.DaysTopicTotal {
+		if _, ok := capabilityPayload[capabilityId]; !ok {
+			capabilityPayload[capabilityId] = CapabilityCostContainer{
+				map[ClusterId]*Cluster{},
+			}
+		}
+
+		for clusterId, topicMap := range clusterMap {
+			if _, ok := capabilityPayload[capabilityId].Clusters[clusterId]; !ok {
+				capabilityPayload[capabilityId].Clusters[clusterId] = &Cluster{
+					Id:            string(clusterId),
+					MetricsTotal:  map[MetricKey]*MetricCost{},
+					MetricsTopics: map[TopicName]map[MetricKey]*MetricCost{},
+				}
+			}
+
+			for topicName, metricMap := range topicMap {
+				capabilityPayload[capabilityId].Clusters[clusterId].MetricsTopics[topicName] = make(map[MetricKey]*MetricCost)
+				for metricKey, metricValue := range metricMap {
+					capabilityPayload[capabilityId].Clusters[clusterId].MetricsTopics[topicName][metricKey] = &MetricCost{
+						MetricValue: metricValue,
+					}
+				}
+			}
+		}
+	}
+
+	payload.TotalCostByCapability = capabilityPayload
 	payload.TotalStorageCost = payload.TotalStorageCost * 24 * 30
 
 	fmt.Printf("CapabilityResponseToCostCsv end TotalStorage: %f\n", payload.TotalStorage)
-	fmt.Printf("CapabilityResponseToCostCsv end sum: %f\n", sum)
 
 	return payload
 }
