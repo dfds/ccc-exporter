@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ccc-exporter
+  namespace: selfservice
+  labels:
+    todo: "todo"
+spec:
+  ports:
+    - name: metrics
+      port: 8888
+      targetPort: metrics
+
+  selector:
+    app: ccc-exporter
