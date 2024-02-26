@@ -26,13 +26,25 @@ func (e *ExporterApplication) EnsureCSVDataFolderExists() error {
 	return nil
 }
 
+func ToConfluentCostType(m model.MetricKey) service.CostType {
+	switch m {
+	case model.ConfluentKafkaServerReceivedBytes:
+		return service.CostTypeKafkaNetworkRead
+	case model.ConfluentKafkaServerSentBytes:
+		return service.CostTypeKafkaNetworkWrite
+	case model.ConfluentKafkaServerRetainedBytes:
+		return service.CostTypeKafkaStorage
+	}
+	return "INVALID"
+}
+
 func (e *ExporterApplication) TryAddLine(writer *csv.Writer, data service.DataForDay, clusterId model.ClusterId, metricsKey model.MetricKey) {
 	metricData, ok := data.Topics[metricsKey][clusterId]
 	if !ok {
 		log.Warnf("No data found for cluster %s and metric %s", clusterId, metricsKey)
 		return
 	}
-	costType := metricsKey.ToConfluentCostType()
+	costType := ToConfluentCostType(metricsKey)
 	costs, err := e.costService.GetCosts(clusterId, costType)
 	if err != nil {
 		log.Warnf("No cost found for cluster %s and cost type %s", clusterId, costType)

@@ -1,7 +1,5 @@
 package model
 
-import "go.dfds.cloud/ccc-exporter/internal/service"
-
 type MetricKey string
 
 const (
@@ -27,18 +25,6 @@ func (m MetricKey) ToCsvFormatString() string {
 		return "written-bytes"
 	case ConfluentKafkaServerRetainedBytes:
 		return "stored-bytes"
-	}
-	return "INVALID"
-}
-
-func (m MetricKey) ToConfluentCostType() service.CostType {
-	switch m {
-	case ConfluentKafkaServerReceivedBytes:
-		return service.CostTypeKafkaNetworkRead
-	case ConfluentKafkaServerSentBytes:
-		return service.CostTypeKafkaNetworkWrite
-	case ConfluentKafkaServerRetainedBytes:
-		return service.CostTypeKafkaStorage
 	}
 	return "INVALID"
 }

@@ -19,9 +19,6 @@ func NewGatherer(client *client.PrometheusClient) *GathererService {
 		cachedUsage: make(map[simpleDayKey]DataForDay)}
 }
 
-type CapabilityId string
-type TopicName string
-
 type MetricData struct {
 	Time  float64
 	Value float64
@@ -48,7 +45,7 @@ func toSimpleDayKey(t time.Time) simpleDayKey {
 
 type DataForDay struct {
 	DayDate time.Time
-	Topics  map[model.MetricKey]map[model.ClusterId]map[TopicName]MetricData
+	Topics  map[model.MetricKey]map[model.ClusterId]map[model.TopicName]MetricData
 }
 
 func getQueryForMetric(metricKey model.MetricKey, timeDiffInSeconds int) string {
@@ -73,11 +70,11 @@ func (g *GathererService) GetMetricsForDay(targetTime time.Time) (DataForDay, er
 		return DataForDay{}, fmt.Errorf("cannot get metrics for current/future day")
 	}
 
-	metricsForDayAndTopic := make(map[model.MetricKey]map[model.ClusterId]map[TopicName]MetricData)
+	metricsForDayAndTopic := make(map[model.MetricKey]map[model.ClusterId]map[model.TopicName]MetricData)
 	for _, metric := range model.ConfluentMetrics {
-		metricsForDayAndTopic[metric] = make(map[model.ClusterId]map[TopicName]MetricData)
+		metricsForDayAndTopic[metric] = make(map[model.ClusterId]map[model.TopicName]MetricData)
 		for _, clusterId := range model.ConfluentClusters {
-			metricsForDayAndTopic[metric][clusterId] = make(map[TopicName]MetricData)
+			metricsForDayAndTopic[metric][clusterId] = make(map[model.TopicName]MetricData)
 		}
 	}
 
@@ -105,7 +102,7 @@ func (g *GathererService) GetMetricsForDay(targetTime time.Time) (DataForDay, er
 				log.Err(err).Msgf("error when attempting to parse value returned from prometheus")
 				continue
 			}
-			topicName := TopicName(vector.Metric.Topic)
+			topicName := model.TopicName(vector.Metric.Topic)
 			if _, ok := metricsForDayAndTopic[metricKey][clusterId][topicName]; ok {
 				log.Fatal().Msgf("duplicate metric found for topic: %s", vector.Metric.Topic)
 			}
