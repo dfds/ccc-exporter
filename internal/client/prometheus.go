@@ -8,19 +8,19 @@ import (
 	"net/http"
 )
 
-type Client struct {
+type PrometheusClient struct {
 	endpoint string
 	http     *http.Client
 }
 
-func NewClient(endpoint string) *Client {
-	return &Client{
+func NewPrometheusClient(endpoint string) *PrometheusClient {
+	return &PrometheusClient{
 		endpoint: endpoint,
 		http:     http.DefaultClient,
 	}
 }
 
-func (c *Client) Query(query string, time float64) (*QueryResponse, error) {
+func (c *PrometheusClient) Query(query string, time float64) (*QueryResponse, error) {
 	//req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/v1/query_range", c.endpoint), nil)
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/v1/query", c.endpoint), nil)
 	if err != nil {
