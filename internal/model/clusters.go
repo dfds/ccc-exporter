@@ -13,9 +13,16 @@ const (
 	ClusterIdSSUDevEnvironment2         ClusterId = "lkc-j9gknw"
 )
 
-var ConfluentClusters = []ClusterId{ClusterIdProd, ClusterIdDev, ClusterIdDevelopmentCluster4, ClusterIdSSUDevEnvironment, ClusterIdSSUDevEnvironment2}
+var ConfluentClusters = []ClusterId{
+	ClusterIdProd,
+	ClusterIdDev,
+	ClusterIdDevelopmentCluster4,
+	ClusterIdConfluentControlCenterTest,
+	ClusterIdSSUDevEnvironment,
+	ClusterIdSSUDevEnvironment2,
+}
 
-func TryParse(s string) (ClusterId, error) {
+func TryParseClusterId(s string) (ClusterId, error) {
 	for _, cluster := range ConfluentClusters {
 		if s == string(cluster) {
 			return cluster, nil

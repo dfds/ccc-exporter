@@ -28,3 +28,14 @@ func (m MetricKey) ToCsvFormatString() string {
 	}
 	return "INVALID"
 }
+func (m MetricKey) ToConfluentCostType() CostType {
+	switch m {
+	case ConfluentKafkaServerReceivedBytes:
+		return CostTypeKafkaNetworkRead
+	case ConfluentKafkaServerSentBytes:
+		return CostTypeKafkaNetworkWrite
+	case ConfluentKafkaServerRetainedBytes:
+		return CostTypeKafkaStorage
+	}
+	return "INVALID"
+}

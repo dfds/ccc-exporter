@@ -3,8 +3,8 @@ package client
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"io"
-	"log"
 	"net/http"
 )
 
@@ -58,11 +58,11 @@ func ResultToVector(data []interface{}) ([]Vector, error) {
 		var deserialised vectorMidParse
 		serialised, err := json.Marshal(d)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal().Err(err).Msg("error serialising prometheus response")
 		}
 		err = json.Unmarshal(serialised, &deserialised)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal().Err(err).Msgf("error deserialising prometheus response: %s", string(serialised))
 		}
 
 		casted = append(casted, deserialised)

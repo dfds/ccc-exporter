@@ -44,8 +44,9 @@ func toSimpleDayKey(t time.Time) simpleDayKey {
 }
 
 type DataForDay struct {
-	DayDate time.Time
-	Topics  map[model.MetricKey]map[model.ClusterId]map[model.TopicName]MetricData
+	DayDate               time.Time
+	Topics                map[model.MetricKey]map[model.ClusterId]map[model.TopicName]MetricData
+	CloudEngineeringCosts map[model.ClusterId]map[model.TopicName]float64
 }
 
 func getQueryForMetric(metricKey model.MetricKey, timeDiffInSeconds int) string {
@@ -90,7 +91,7 @@ func (g *GathererService) GetMetricsForDay(targetTime time.Time) (DataForDay, er
 			return DataForDay{}, err
 		}
 		for _, vector := range data {
-			clusterId, err := model.TryParse(vector.Metric.KafkaID)
+			clusterId, err := model.TryParseClusterId(vector.Metric.KafkaID)
 
 			if err != nil {
 				log.Err(err).Msgf("error when attempting to parse KafkaId returned from prometheus")

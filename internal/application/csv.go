@@ -26,26 +26,14 @@ func (e *ExporterApplication) EnsureCSVDataFolderExists() error {
 	return nil
 }
 
-func ToConfluentCostType(m model.MetricKey) service.CostType {
-	switch m {
-	case model.ConfluentKafkaServerReceivedBytes:
-		return service.CostTypeKafkaNetworkRead
-	case model.ConfluentKafkaServerSentBytes:
-		return service.CostTypeKafkaNetworkWrite
-	case model.ConfluentKafkaServerRetainedBytes:
-		return service.CostTypeKafkaStorage
-	}
-	return "INVALID"
-}
-
-func calcCost(m service.MetricData, costs service.ConfluentCost) float64 {
+func calcCost(m service.MetricData, costs model.ConfluentCost) float64 {
 	inGB := m.Value * 1024 * 1024 * 1024
 	switch costs.CostUnit {
-	case service.USDPerGB:
+	case model.GB:
 		return inGB * costs.CostPerUnit
-	case service.USDPerGBHour:
-		if costs.CostType == service.CostTypeKafkaStorage {
-			return inGB * costs.CostPerUnit * 24 * service.ConfluentCostKafkaStorageReplicationFactor
+	case model.GBHour:
+		if costs.CostType == model.CostTypeKafkaStorage {
+			return inGB * costs.CostPerUnit * 24 * model.ConfluentCostKafkaStorageReplicationFactor
 		}
 		return inGB * costs.CostPerUnit * 24
 	}
@@ -58,7 +46,7 @@ func (e *ExporterApplication) TryAddLine(writer *csv.Writer, data service.DataFo
 		log.Warnf("No data found for cluster %s and metric %s", clusterId, metricsKey)
 		return
 	}
-	costType := ToConfluentCostType(metricsKey)
+	costType := metricsKey.ToConfluentCostType()
 	costs, err := e.costService.GetCosts(clusterId, costType)
 	if err != nil {
 		log.Warnf("No cost found for cluster %s and cost type %s", clusterId, costType)
