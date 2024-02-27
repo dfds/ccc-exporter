@@ -38,6 +38,17 @@ func ToConfluentCostType(m model.MetricKey) service.CostType {
 	return "INVALID"
 }
 
+func calcCost(m service.MetricData, costs service.ConfluentCost) float64 {
+	inGB := m.Value * 1024 * 1024 * 1024
+	switch costs.CostUnit {
+	case service.USDPerGB:
+		return inGB * costs.CostPerUnit
+	case service.USDPerGBHour:
+		return inGB * costs.CostPerUnit * 24
+	}
+	return 0
+}
+
 func (e *ExporterApplication) TryAddLine(writer *csv.Writer, data service.DataForDay, clusterId model.ClusterId, metricsKey model.MetricKey) {
 	metricData, ok := data.Topics[metricsKey][clusterId]
 	if !ok {
@@ -56,7 +67,7 @@ func (e *ExporterApplication) TryAddLine(writer *csv.Writer, data service.DataFo
 		err = writer.Write([]string{
 			data.DayDate.Format("2006-01-02"),
 			fmt.Sprintf("%s-%s-%s", clusterId, topic, metricsKey.ToCsvFormatString()),
-			fmt.Sprintf("%f", m.Value*costs.CostPerUnit),
+			fmt.Sprintf("%f", calcCost(m, costs)),
 		})
 	}
 }
