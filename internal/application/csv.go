@@ -44,6 +44,9 @@ func calcCost(m service.MetricData, costs service.ConfluentCost) float64 {
 	case service.USDPerGB:
 		return inGB * costs.CostPerUnit
 	case service.USDPerGBHour:
+		if costs.CostType == service.CostTypeKafkaStorage {
+			return inGB * costs.CostPerUnit * 24 * service.ConfluentCostKafkaStorageReplicationFactor
+		}
 		return inGB * costs.CostPerUnit * 24
 	}
 	return 0

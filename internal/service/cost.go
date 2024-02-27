@@ -19,6 +19,7 @@ const (
 	CostTypeKafkaNumCkus      CostType = "KAFKA_NUM_CKUS"
 	CostTypeKafkaPartition    CostType = "KAFKA_PARTITION"
 )
+const ConfluentCostKafkaStorageReplicationFactor = 3
 
 type ProductType string
 
