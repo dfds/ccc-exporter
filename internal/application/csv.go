@@ -47,7 +47,7 @@ func (e *ExporterApplication) TryAddLine(writer *csv.Writer, data service.DataFo
 		return
 	}
 	costType := metricsKey.ToConfluentCostType()
-	costs, err := e.costService.GetCosts(clusterId, costType)
+	costs, err := e.costService.GetKafkaCosts(clusterId, costType)
 	if err != nil {
 		log.Warnf("No cost found for cluster %s and cost type %s", clusterId, costType)
 		return

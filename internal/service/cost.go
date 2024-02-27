@@ -4,20 +4,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/rs/zerolog/log"
+	"go.dfds.cloud/ccc-exporter/internal/client"
 	"go.dfds.cloud/ccc-exporter/internal/model"
+	"go.dfds.cloud/ccc-exporter/internal/utils"
 	"os"
 	"time"
 )
 
 type ConfluentCostService struct {
 	// Can change from day to day, start with just keeping the latest
-	cachedCosts map[model.ClusterId]map[model.CostType]model.ConfluentCost
+	cachedKafkaCosts map[model.ClusterId]map[model.CostType]model.ConfluentCost
+
+	confluentCloudClient *client.ConfluentCloudClient
 }
 
 func (c *ConfluentCostService) CacheCosts(costs model.ConfluentCostResponse) {
 
 	for _, cluster := range model.ConfluentClusters {
-		c.cachedCosts[cluster] = make(map[model.CostType]model.ConfluentCost)
+		c.cachedKafkaCosts[cluster] = make(map[model.CostType]model.ConfluentCost)
 	}
 
 	for _, cost := range costs.Data {
@@ -44,7 +48,7 @@ func (c *ConfluentCostService) CacheCosts(costs model.ConfluentCostResponse) {
 				log.Error().Msgf("failed to parse cluster id: %s", err)
 				continue
 			}
-			c.cachedCosts[clusterId][costType] = model.ConfluentCost{
+			c.cachedKafkaCosts[clusterId][costType] = model.ConfluentCost{
 				CostType:    costType,
 				ProductType: productType,
 				ClusterId:   clusterId,
@@ -77,8 +81,8 @@ func (c *ConfluentCostService) SetupTestCostsFromFile() bool {
 
 func (c *ConfluentCostService) SetupHardcodedTestCosts() {
 	for _, cluster := range model.ConfluentClusters {
-		c.cachedCosts[cluster] = make(map[model.CostType]model.ConfluentCost)
-		c.cachedCosts[cluster][model.CostTypeKafkaNetworkWrite] = model.ConfluentCost{
+		c.cachedKafkaCosts[cluster] = make(map[model.CostType]model.ConfluentCost)
+		c.cachedKafkaCosts[cluster][model.CostTypeKafkaNetworkWrite] = model.ConfluentCost{
 			CostType:    model.CostTypeKafkaNetworkWrite,
 			ProductType: model.ProductTypeKafka,
 			ClusterId:   cluster,
@@ -87,7 +91,7 @@ func (c *ConfluentCostService) SetupHardcodedTestCosts() {
 			TotalCost:   1.23,
 		}
 
-		c.cachedCosts[cluster][model.CostTypeKafkaNetworkRead] = model.ConfluentCost{
+		c.cachedKafkaCosts[cluster][model.CostTypeKafkaNetworkRead] = model.ConfluentCost{
 			CostType:    model.CostTypeKafkaNetworkRead,
 			ProductType: model.ProductTypeKafka,
 			ClusterId:   cluster,
@@ -96,7 +100,7 @@ func (c *ConfluentCostService) SetupHardcodedTestCosts() {
 			TotalCost:   6.0624,
 		}
 
-		c.cachedCosts[cluster][model.CostTypeKafkaStorage] = model.ConfluentCost{
+		c.cachedKafkaCosts[cluster][model.CostTypeKafkaStorage] = model.ConfluentCost{
 			CostType:    model.CostTypeKafkaStorage,
 			ProductType: model.ProductTypeKafka,
 			ClusterId:   cluster,
@@ -107,8 +111,11 @@ func (c *ConfluentCostService) SetupHardcodedTestCosts() {
 	}
 }
 
-func NewConfluentCostService(useTestCosts bool) *ConfluentCostService {
-	manager := &ConfluentCostService{cachedCosts: make(map[model.ClusterId]map[model.CostType]model.ConfluentCost)}
+func NewConfluentCostService(confluentCloudClient *client.ConfluentCloudClient, useTestCosts bool) *ConfluentCostService {
+	manager := &ConfluentCostService{
+		cachedKafkaCosts:     make(map[model.ClusterId]map[model.CostType]model.ConfluentCost),
+		confluentCloudClient: confluentCloudClient,
+	}
 
 	if useTestCosts {
 		log.Info().Msgf("Using test costs")
@@ -123,8 +130,8 @@ func NewConfluentCostService(useTestCosts bool) *ConfluentCostService {
 	return manager
 }
 
-func (c *ConfluentCostService) GetCosts(clusterId model.ClusterId, costType model.CostType) (model.ConfluentCost, error) {
-	if costs, ok := c.cachedCosts[clusterId]; ok {
+func (c *ConfluentCostService) GetKafkaCosts(clusterId model.ClusterId, costType model.CostType) (model.ConfluentCost, error) {
+	if costs, ok := c.cachedKafkaCosts[clusterId]; ok {
 		if cost, ok := costs[costType]; ok {
 			return cost, nil
 		}
@@ -135,10 +142,21 @@ func (c *ConfluentCostService) GetCosts(clusterId model.ClusterId, costType mode
 func (c *ConfluentCostService) HasCostsForDate(date time.Time) bool {
 	// TODO: Add cached costs per dates
 	// for now we just check if any costs are cached
-	_, err := c.GetCosts(model.ClusterIdProd, model.CostTypeKafkaNetworkWrite)
+	_, err := c.GetKafkaCosts(model.ClusterIdProd, model.CostTypeKafkaNetworkWrite)
 	if err != nil {
 		return false
 	}
 	return true
+}
 
+func (c *ConfluentCostService) GetCostsForDate(date utils.YearMonthDayDate) (model.ConfluentCostResponse, error) {
+
+	toTime := date.ToTimeUTC()
+	fromTime := toTime.Add(-24 * time.Hour)
+	costs, err := c.confluentCloudClient.GetCosts(fromTime, toTime)
+	if err != nil {
+		return model.ConfluentCostResponse{}, err
+	}
+	c.CacheCosts(*costs)
+	return *costs, nil
 }

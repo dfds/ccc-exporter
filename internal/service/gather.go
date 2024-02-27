@@ -5,18 +5,19 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.dfds.cloud/ccc-exporter/internal/client"
 	"go.dfds.cloud/ccc-exporter/internal/model"
+	"go.dfds.cloud/ccc-exporter/internal/utils"
 	"strconv"
 	"time"
 )
 
 type GathererService struct {
 	client      *client.PrometheusClient
-	cachedUsage map[simpleDayKey]DataForDay
+	cachedUsage map[utils.YearMonthDayDate]DataForDay
 }
 
 func NewGatherer(client *client.PrometheusClient) *GathererService {
 	return &GathererService{client: client,
-		cachedUsage: make(map[simpleDayKey]DataForDay)}
+		cachedUsage: make(map[utils.YearMonthDayDate]DataForDay)}
 }
 
 type MetricData struct {
@@ -27,20 +28,6 @@ type MetricData struct {
 type AllMetricsResponse struct {
 	Days30 map[model.MetricKey]map[model.ClusterId]map[string]float64
 	PerDay map[model.MetricKey]map[model.ClusterId]map[string][]MetricData
-}
-
-type simpleDayKey struct {
-	Year  int
-	Month int
-	Day   int
-}
-
-func toSimpleDayKey(t time.Time) simpleDayKey {
-	return simpleDayKey{
-		Year:  t.Year(),
-		Month: int(t.Month()),
-		Day:   t.Day(),
-	}
 }
 
 type DataForDay struct {
@@ -61,7 +48,9 @@ func (g *GathererService) GetMetricsForDay(targetTime time.Time) (DataForDay, er
 
 	now := time.Now().UTC()
 
-	cached, ok := g.cachedUsage[toSimpleDayKey(targetTime)]
+	cacheKey := utils.ToYearMonthDayDate(targetTime)
+
+	cached, ok := g.cachedUsage[cacheKey]
 	if ok {
 		return cached, nil
 	}
@@ -114,12 +103,12 @@ func (g *GathererService) GetMetricsForDay(targetTime time.Time) (DataForDay, er
 		}
 	}
 
-	g.cachedUsage[toSimpleDayKey(targetTime)] = DataForDay{
+	g.cachedUsage[cacheKey] = DataForDay{
 		DayDate: targetTime,
 		Topics:  metricsForDayAndTopic,
 	}
 
-	return g.cachedUsage[toSimpleDayKey(targetTime)], nil
+	return g.cachedUsage[cacheKey], nil
 }
 
 func (g *GathererService) GetAllMetrics() *AllMetricsResponse {
@@ -138,7 +127,7 @@ func (g *GathererService) GetAllMetrics() *AllMetricsResponse {
 
 		baseQuery := fmt.Sprintf("sum_over_time(%s[1d]", metricKey)
 		for i := 0; i <= 30; i++ {
-			var query string = baseQuery
+			var query = baseQuery
 			timestamp := now
 			if i != 0 {
 				query = fmt.Sprintf("%s offset %dd)", baseQuery, i)

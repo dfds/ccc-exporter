@@ -1,0 +1,6 @@
+{
+  "worker": {
+    "intervalSeconds": 60,
+    "daysToLookBack": 7
+  }
+}

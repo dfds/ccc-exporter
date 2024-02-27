@@ -3,6 +3,7 @@ package application
 import (
 	"fmt"
 	"github.com/gofiber/fiber/v2/log"
+	"go.dfds.cloud/ccc-exporter/config"
 	"go.dfds.cloud/ccc-exporter/internal/client"
 	"go.dfds.cloud/ccc-exporter/internal/service"
 	"time"
@@ -27,13 +28,14 @@ type ExporterApplication struct {
 	costService     *service.ConfluentCostService
 
 	exportProcesses []ExportProcess
+	confluentClient *client.ConfluentCloudClient
 }
 
-func NewExporterApplication(prometheusClient *client.PrometheusClient, costService *service.ConfluentCostService) ExporterApplication {
+func NewExporterApplication(prometheusClient *client.PrometheusClient, confluentClient *client.ConfluentCloudClient) ExporterApplication {
 
 	return ExporterApplication{
 		gathererService: service.NewGatherer(prometheusClient),
-		costService:     costService,
+		costService:     service.NewConfluentCostService(confluentClient, true),
 	}
 }
 
@@ -56,14 +58,14 @@ func (e *ExporterApplication) SetupProcesses(daysToLookBack int) {
 	}
 }
 
-func (e *ExporterApplication) Work(workerIntervalSeconds int, daysToLookBack int) {
-	sleepInterval, err := time.ParseDuration(fmt.Sprintf("%ds", workerIntervalSeconds))
+func (e *ExporterApplication) Work(config config.Worker) {
+	sleepInterval, err := time.ParseDuration(fmt.Sprintf("%ds", config.IntervalSeconds))
 	if err != nil {
 		panic(err)
 	}
 
 	for {
-		e.SetupProcesses(daysToLookBack)
+		e.SetupProcesses(config.DaysToLookBack)
 		if len(e.exportProcesses) == 0 {
 			fmt.Println("No data to be exported")
 			time.Sleep(sleepInterval)
