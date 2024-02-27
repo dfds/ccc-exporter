@@ -15,6 +15,8 @@ type ExportState string
 const (
 	ExportStateNeedCosts               ExportState = "NEED_COSTS"
 	ExportStateNeedPrometheusUsageData ExportState = "NEED_PROMETHEUS_USAGE_DATA"
+	ExportStateNeedLocalCSVExport                  = "NEED_LOCAL_CSV_EXPORT"
+	ExportStateNeedToPutCSVInS3        ExportState = "NEED_TO_PUT_CSV_IN_S3"
 	ExportStateDone                    ExportState = "DONE"
 )
 
@@ -27,9 +29,9 @@ type ExportProcess struct {
 type ExporterApplication struct {
 	gathererService *service.GathererService
 	costService     *service.ConfluentCostService
+	s3Client        *client.S3Client
 
 	exportProcesses []ExportProcess
-	confluentClient *client.ConfluentCloudClient
 }
 
 func NewExporterApplication(prometheusClient *client.PrometheusClient, confluentClient *client.ConfluentCloudClient) ExporterApplication {
@@ -69,7 +71,7 @@ func (e *ExporterApplication) SetupProcesses(checkS3 bool, daysToLookBack int) {
 	}
 }
 
-func (e *ExporterApplication) Work(config config.Worker) {
+func (e *ExporterApplication) Work(config config.Worker, s3Config config.S3) {
 	sleepInterval, err := time.ParseDuration(fmt.Sprintf("%ds", config.IntervalSeconds))
 	if err != nil {
 		panic(err)
@@ -85,6 +87,7 @@ func (e *ExporterApplication) Work(config config.Worker) {
 			}
 		}
 
+		// TODO: Very messy state machine, should be refactored
 		for i, process := range e.exportProcesses {
 			switch process.currentState {
 			case ExportStateNeedCosts:
@@ -98,28 +101,49 @@ func (e *ExporterApplication) Work(config config.Worker) {
 				log.Infof("successfully found confluent costs for %s", process.dayTime)
 				e.exportProcesses[i].currentState = ExportStateNeedPrometheusUsageData
 			case ExportStateNeedPrometheusUsageData:
-				data, err := e.gathererService.GetMetricsForDay(process.dayTime)
+				_, err := e.gathererService.GetMetricsForDay(process.dayTime)
 				if err != nil {
 					log.Warnf("unable to get prometheus usage data for %s: %s", process.dayTime, err)
 					continue
 				}
-				err = e.WriteCSV(data)
+				log.Infof("successfully found prometheus usage data for %s", process.dayTime)
+				e.exportProcesses[i].currentState = ExportStateNeedLocalCSVExport
+			case ExportStateNeedLocalCSVExport:
+				metricsData, err := e.gathererService.GetMetricsForDay(process.dayTime)
 				if err != nil {
-					log.Warnf("unable to get write csv usage data for %s: %s", process.dayTime, err)
+					return
+				}
+				err = e.WriteCSV(metricsData)
+				if err != nil {
+					log.Errorf("unable to write csv for %s: %s", process.dayTime, err)
 					continue
 				}
+				log.Infof("successfully wrote csv for %s", process.dayTime)
+				e.exportProcesses[i].currentState = ExportStateNeedToPutCSVInS3
+			case ExportStateNeedToPutCSVInS3:
+				data, err := e.ReadCsvRaw(process.dayTime)
+				if err != nil {
+					log.Errorf("unable to find csv locally %s", process.dayTime, err)
+					continue
+				}
+				err = e.s3Client.PutObject(s3Config.BucketName, s3Config.BucketKey, data)
+				if err != nil {
+					log.Errorf("unable to put csv in s3 for %s: %s", process.dayTime, err)
+					continue
+				}
+				log.Infof("successfully put csv in s3 for %s", process.dayTime)
 				e.exportProcesses[i].currentState = ExportStateDone
-				log.Infof("successfully exported cost data for %s", process.dayTime)
+			case ExportStateDone:
+			}
+
+			// remove done processes
+			for i := len(e.exportProcesses) - 1; i >= 0; i-- {
+				if e.exportProcesses[i].currentState == ExportStateDone {
+					e.exportProcesses = append(e.exportProcesses[:i], e.exportProcesses[i+1:]...)
+				}
 			}
 		}
-
-		// remove done processes
-		for i := len(e.exportProcesses) - 1; i >= 0; i-- {
-			if e.exportProcesses[i].currentState == ExportStateDone {
-				e.exportProcesses = append(e.exportProcesses[:i], e.exportProcesses[i+1:]...)
-			}
-		}
-
 		time.Sleep(sleepInterval)
+		log.Infof("woke up, checking for work")
 	}
 }

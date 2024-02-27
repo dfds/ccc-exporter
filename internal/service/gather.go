@@ -12,28 +12,17 @@ import (
 
 type GathererService struct {
 	client      *client.PrometheusClient
-	cachedUsage map[utils.YearMonthDayDate]DataForDay
+	cachedUsage map[utils.YearMonthDayDate]model.MetricsDataForDay
 }
 
 func NewGatherer(client *client.PrometheusClient) *GathererService {
 	return &GathererService{client: client,
-		cachedUsage: make(map[utils.YearMonthDayDate]DataForDay)}
-}
-
-type MetricData struct {
-	Time  float64
-	Value float64
+		cachedUsage: make(map[utils.YearMonthDayDate]model.MetricsDataForDay)}
 }
 
 type AllMetricsResponse struct {
 	Days30 map[model.MetricKey]map[model.ClusterId]map[string]float64
-	PerDay map[model.MetricKey]map[model.ClusterId]map[string][]MetricData
-}
-
-type DataForDay struct {
-	DayDate               utils.YearMonthDayDate
-	Topics                map[model.MetricKey]map[model.ClusterId]map[model.TopicName]MetricData
-	CloudEngineeringCosts map[model.ClusterId]map[model.TopicName]float64
+	PerDay map[model.MetricKey]map[model.ClusterId]map[string][]model.MetricData
 }
 
 func getQueryForMetric(metricKey model.MetricKey, timeDiffInSeconds int) string {
@@ -44,7 +33,7 @@ func getQueryForMetric(metricKey model.MetricKey, timeDiffInSeconds int) string 
 	return fmt.Sprintf("sum_over_time(%s)", innerQuery)
 }
 
-func (g *GathererService) GetMetricsForDay(targetTime utils.YearMonthDayDate) (DataForDay, error) {
+func (g *GathererService) GetMetricsForDay(targetTime utils.YearMonthDayDate) (model.MetricsDataForDay, error) {
 
 	now := time.Now().UTC()
 
@@ -55,14 +44,14 @@ func (g *GathererService) GetMetricsForDay(targetTime utils.YearMonthDayDate) (D
 
 	timeDiffInSeconds := int(now.Sub(targetTime.ToTimeUTC()).Seconds()) // loss of precision, but good enough for this use case
 	if timeDiffInSeconds <= 0 {
-		return DataForDay{}, fmt.Errorf("cannot get metrics for current/future day")
+		return model.MetricsDataForDay{}, fmt.Errorf("cannot get metrics for current/future day")
 	}
 
-	metricsForDayAndTopic := make(map[model.MetricKey]map[model.ClusterId]map[model.TopicName]MetricData)
+	metricsForDayAndTopic := make(map[model.MetricKey]map[model.ClusterId]map[model.TopicName]model.MetricData)
 	for _, metric := range model.ConfluentMetrics {
-		metricsForDayAndTopic[metric] = make(map[model.ClusterId]map[model.TopicName]MetricData)
+		metricsForDayAndTopic[metric] = make(map[model.ClusterId]map[model.TopicName]model.MetricData)
 		for _, clusterId := range model.ConfluentClusters {
-			metricsForDayAndTopic[metric][clusterId] = make(map[model.TopicName]MetricData)
+			metricsForDayAndTopic[metric][clusterId] = make(map[model.TopicName]model.MetricData)
 		}
 	}
 
@@ -70,12 +59,12 @@ func (g *GathererService) GetMetricsForDay(targetTime utils.YearMonthDayDate) (D
 		query := getQueryForMetric(metricKey, timeDiffInSeconds)
 		queryResp, err := g.client.Query(query, float64(now.Unix()))
 		if err != nil {
-			return DataForDay{}, err
+			return model.MetricsDataForDay{}, err
 		}
 
 		data, err := client.ResultToVector(queryResp.Data.Result)
 		if err != nil {
-			return DataForDay{}, err
+			return model.MetricsDataForDay{}, err
 		}
 		for _, vector := range data {
 			clusterId, err := model.TryParseClusterId(vector.Metric.KafkaID)
@@ -94,14 +83,14 @@ func (g *GathererService) GetMetricsForDay(targetTime utils.YearMonthDayDate) (D
 			if _, ok := metricsForDayAndTopic[metricKey][clusterId][topicName]; ok {
 				log.Fatal().Msgf("duplicate metric found for topic: %s", vector.Metric.Topic)
 			}
-			metricsForDayAndTopic[metricKey][clusterId][topicName] = MetricData{
+			metricsForDayAndTopic[metricKey][clusterId][topicName] = model.MetricData{
 				Time:  vector.Value.Time,
 				Value: valueAsFloat,
 			}
 		}
 	}
 
-	g.cachedUsage[targetTime] = DataForDay{
+	g.cachedUsage[targetTime] = model.MetricsDataForDay{
 		DayDate: targetTime,
 		Topics:  metricsForDayAndTopic,
 	}
@@ -111,7 +100,7 @@ func (g *GathererService) GetMetricsForDay(targetTime utils.YearMonthDayDate) (D
 
 func (g *GathererService) GetAllMetrics() *AllMetricsResponse {
 	dataStore30Days := make(map[model.MetricKey]map[model.ClusterId]map[string]float64)
-	dataStorePerDay := make(map[model.MetricKey]map[model.ClusterId]map[string][]MetricData)
+	dataStorePerDay := make(map[model.MetricKey]map[model.ClusterId]map[string][]model.MetricData)
 	now := time.Now()
 
 	for _, metricKey := range model.ConfluentMetrics {
@@ -120,7 +109,7 @@ func (g *GathererService) GetAllMetrics() *AllMetricsResponse {
 			dataStore30Days[metricKey] = make(map[model.ClusterId]map[string]float64)
 		}
 		if _, ok := dataStorePerDay[metricKey]; !ok {
-			dataStorePerDay[metricKey] = make(map[model.ClusterId]map[string][]MetricData)
+			dataStorePerDay[metricKey] = make(map[model.ClusterId]map[string][]model.MetricData)
 		}
 
 		baseQuery := fmt.Sprintf("sum_over_time(%s[1d]", metricKey)
@@ -154,10 +143,10 @@ func (g *GathererService) GetAllMetrics() *AllMetricsResponse {
 
 			for _, vector := range data {
 				if _, ok := dataStorePerDay[metricKey][model.ClusterId(vector.Metric.KafkaID)]; !ok {
-					dataStorePerDay[metricKey][model.ClusterId(vector.Metric.KafkaID)] = map[string][]MetricData{}
+					dataStorePerDay[metricKey][model.ClusterId(vector.Metric.KafkaID)] = map[string][]model.MetricData{}
 				}
 				if _, ok := dataStorePerDay[metricKey][model.ClusterId(vector.Metric.KafkaID)][vector.Metric.Topic]; !ok {
-					dataStorePerDay[metricKey][model.ClusterId(vector.Metric.KafkaID)][vector.Metric.Topic] = []MetricData{}
+					dataStorePerDay[metricKey][model.ClusterId(vector.Metric.KafkaID)][vector.Metric.Topic] = []model.MetricData{}
 				}
 				if _, ok := dataStore30Days[metricKey][model.ClusterId(vector.Metric.KafkaID)]; !ok {
 					dataStore30Days[metricKey][model.ClusterId(vector.Metric.KafkaID)] = map[string]float64{}
@@ -165,7 +154,7 @@ func (g *GathererService) GetAllMetrics() *AllMetricsResponse {
 
 				f64, _ := strconv.ParseFloat(vector.Value.Value, 64)
 
-				dataStorePerDay[metricKey][model.ClusterId(vector.Metric.KafkaID)][vector.Metric.Topic] = append(dataStorePerDay[metricKey][model.ClusterId(vector.Metric.KafkaID)][vector.Metric.Topic], MetricData{
+				dataStorePerDay[metricKey][model.ClusterId(vector.Metric.KafkaID)][vector.Metric.Topic] = append(dataStorePerDay[metricKey][model.ClusterId(vector.Metric.KafkaID)][vector.Metric.Topic], model.MetricData{
 					Time:  float64(timestamp.Unix()),
 					Value: f64,
 				})

@@ -1,5 +1,7 @@
 package model
 
+import "go.dfds.cloud/ccc-exporter/internal/utils"
+
 type MetricKey string
 
 const (
@@ -38,4 +40,14 @@ func (m MetricKey) ToConfluentCostType() CostType {
 		return CostTypeKafkaStorage
 	}
 	return "INVALID"
+}
+
+type MetricsDataForDay struct {
+	DayDate utils.YearMonthDayDate
+	Topics  map[MetricKey]map[ClusterId]map[TopicName]MetricData
+}
+
+type MetricData struct {
+	Time  float64
+	Value float64
 }

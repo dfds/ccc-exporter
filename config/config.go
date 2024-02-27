@@ -16,8 +16,14 @@ type Confluent struct {
 	ApiKeySecret string `mapstructure:"apiKeySecret" env:"CCC_EXPORTER_CC_API_KEY_SECRET"`
 }
 
+type S3 struct {
+	BucketName string `mapstructure:"bucketName"`
+	BucketKey  string `mapstructure:"bucketKey"`
+}
+
 type Config struct {
 	Worker     Worker    `mapstructure:"worker"`
+	S3         S3        `mapstructure:"s3"`
 	Confluent  Confluent `mapstructure:"confluent"`
 	Prometheus struct {
 		Endpoint string `mapstructure:"endpoint"`

@@ -35,7 +35,7 @@ func main() {
 	confluentClient := client.NewConfluentCloudClient(loadedConfig.Confluent)
 
 	exporterApplication := application.NewExporterApplication(promClient, confluentClient)
-	go exporterApplication.Work(loadedConfig.Worker)
+	go exporterApplication.Work(loadedConfig.Worker, loadedConfig.S3)
 
 	err = app.Listen(":8080")
 	if err != nil {

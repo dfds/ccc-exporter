@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/gofiber/fiber/v2/log"
 	"go.dfds.cloud/ccc-exporter/internal/model"
-	"go.dfds.cloud/ccc-exporter/internal/service"
 	"go.dfds.cloud/ccc-exporter/internal/utils"
 	"os"
 	"path/filepath"
@@ -25,7 +24,7 @@ func (e *ExporterApplication) EnsureCSVDataFolderExists() error {
 	return nil
 }
 
-func calcCost(m service.MetricData, costs model.KafkaConfluentCost) float64 {
+func calcCost(m model.MetricData, costs model.KafkaConfluentCost) float64 {
 	inGB := m.Value * 1024 * 1024 * 1024
 	switch costs.CostUnit {
 	case model.GB:
@@ -39,7 +38,7 @@ func calcCost(m service.MetricData, costs model.KafkaConfluentCost) float64 {
 	return 0
 }
 
-func (e *ExporterApplication) TryAddLine(writer *csv.Writer, data service.DataForDay, clusterId model.ClusterId, metricsKey model.MetricKey) {
+func (e *ExporterApplication) TryAddLine(writer *csv.Writer, data model.MetricsDataForDay, clusterId model.ClusterId, metricsKey model.MetricKey) {
 	metricData, ok := data.Topics[metricsKey][clusterId]
 	if !ok {
 		log.Warnf("No data found for cluster %s and metric %s", clusterId, metricsKey)
@@ -61,7 +60,15 @@ func (e *ExporterApplication) TryAddLine(writer *csv.Writer, data service.DataFo
 	}
 }
 
-func (e *ExporterApplication) WriteCSV(data service.DataForDay) error {
+func (e *ExporterApplication) ReadCsvRaw(date utils.YearMonthDayDate) ([]byte, error) {
+	byteData, err := os.ReadFile(getFilenameForDay(date))
+	if err != nil {
+		return nil, err
+	}
+	return byteData, nil
+}
+
+func (e *ExporterApplication) WriteCSV(data model.MetricsDataForDay) error {
 
 	err := e.EnsureCSVDataFolderExists()
 	if err != nil {
