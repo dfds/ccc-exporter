@@ -31,7 +31,7 @@ type AllMetricsResponse struct {
 }
 
 type DataForDay struct {
-	DayDate               time.Time
+	DayDate               utils.YearMonthDayDate
 	Topics                map[model.MetricKey]map[model.ClusterId]map[model.TopicName]MetricData
 	CloudEngineeringCosts map[model.ClusterId]map[model.TopicName]float64
 }
@@ -44,18 +44,16 @@ func getQueryForMetric(metricKey model.MetricKey, timeDiffInSeconds int) string 
 	return fmt.Sprintf("sum_over_time(%s)", innerQuery)
 }
 
-func (g *GathererService) GetMetricsForDay(targetTime time.Time) (DataForDay, error) {
+func (g *GathererService) GetMetricsForDay(targetTime utils.YearMonthDayDate) (DataForDay, error) {
 
 	now := time.Now().UTC()
 
-	cacheKey := utils.ToYearMonthDayDate(targetTime)
-
-	cached, ok := g.cachedUsage[cacheKey]
+	cached, ok := g.cachedUsage[targetTime]
 	if ok {
 		return cached, nil
 	}
 
-	timeDiffInSeconds := int(now.Sub(targetTime).Seconds()) // loss of precision, but good enough for this use case
+	timeDiffInSeconds := int(now.Sub(targetTime.ToTimeUTC()).Seconds()) // loss of precision, but good enough for this use case
 	if timeDiffInSeconds <= 0 {
 		return DataForDay{}, fmt.Errorf("cannot get metrics for current/future day")
 	}
@@ -103,12 +101,12 @@ func (g *GathererService) GetMetricsForDay(targetTime time.Time) (DataForDay, er
 		}
 	}
 
-	g.cachedUsage[cacheKey] = DataForDay{
+	g.cachedUsage[targetTime] = DataForDay{
 		DayDate: targetTime,
 		Topics:  metricsForDayAndTopic,
 	}
 
-	return g.cachedUsage[cacheKey], nil
+	return g.cachedUsage[targetTime], nil
 }
 
 func (g *GathererService) GetAllMetrics() *AllMetricsResponse {

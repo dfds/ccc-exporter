@@ -5,17 +5,16 @@ import (
 	"github.com/gofiber/fiber/v2/log"
 	"go.dfds.cloud/ccc-exporter/internal/model"
 	"go.dfds.cloud/ccc-exporter/internal/service"
+	"go.dfds.cloud/ccc-exporter/internal/utils"
 	"os"
 	"path/filepath"
-	"time"
 )
 import "encoding/csv"
 
 const CostsExportDir = "exports"
 
-func getFilenameForDay(date time.Time) string {
-	year, month, day := date.Date()
-	return fmt.Sprintf("%d_%d_%d.csv", year, month, day)
+func getFilenameForDay(date utils.YearMonthDayDate) string {
+	return fmt.Sprintf("%d_%d_%d.csv", date.Year, date.Month, date.Day)
 }
 
 func (e *ExporterApplication) EnsureCSVDataFolderExists() error {
@@ -26,7 +25,7 @@ func (e *ExporterApplication) EnsureCSVDataFolderExists() error {
 	return nil
 }
 
-func calcCost(m service.MetricData, costs model.ConfluentCost) float64 {
+func calcCost(m service.MetricData, costs model.KafkaConfluentCost) float64 {
 	inGB := m.Value * 1024 * 1024 * 1024
 	switch costs.CostUnit {
 	case model.GB:
@@ -47,16 +46,15 @@ func (e *ExporterApplication) TryAddLine(writer *csv.Writer, data service.DataFo
 		return
 	}
 	costType := metricsKey.ToConfluentCostType()
-	costs, err := e.costService.GetKafkaCosts(clusterId, costType)
+	costs, err := e.costService.GetKafkaCosts(data.DayDate, clusterId, costType)
 	if err != nil {
 		log.Warnf("No cost found for cluster %s and cost type %s", clusterId, costType)
 		return
 	}
 
 	for topic, m := range metricData {
-
 		err = writer.Write([]string{
-			data.DayDate.Format("2006-01-02"),
+			data.DayDate.ToCSVString(),
 			fmt.Sprintf("%s-%s-%s", clusterId, topic, metricsKey.ToCsvFormatString()),
 			fmt.Sprintf("%f", calcCost(m, costs)),
 		})
@@ -98,7 +96,7 @@ func (e *ExporterApplication) WriteCSV(data service.DataForDay) error {
 	return nil
 }
 
-func (e *ExporterApplication) HasExportedDataForDay(date time.Time) bool {
+func (e *ExporterApplication) HasExportedDataForDay(date utils.YearMonthDayDate) bool {
 
 	err := e.EnsureCSVDataFolderExists()
 	if err != nil {

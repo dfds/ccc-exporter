@@ -6,8 +6,9 @@ import (
 )
 
 type Worker struct {
-	IntervalSeconds int `mapstructure:"intervalSeconds"`
-	DaysToLookBack  int `mapstructure:"daysToLookBack"`
+	IntervalSeconds          int  `mapstructure:"intervalSeconds"`
+	DaysToLookBack           int  `mapstructure:"daysToLookBack"`
+	CheckForExportedDataInS3 bool `mapstructure:"checkForExportedDataInS3"`
 }
 
 type Confluent struct {

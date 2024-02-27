@@ -83,7 +83,7 @@ func TryParseCostUnit(s string) (CostUnit, error) {
 	return "", fmt.Errorf("invalid cost unit: %s", s)
 }
 
-type ConfluentCost struct {
+type KafkaConfluentCost struct {
 	CostType    CostType
 	ProductType ProductType
 	ClusterId   ClusterId

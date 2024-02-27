@@ -11,17 +11,88 @@ import (
 	"time"
 )
 
+type confluentCostForDay struct {
+	kafka map[model.ClusterId]map[model.CostType]model.KafkaConfluentCost
+}
+
+func newConfluentCostForDay() *confluentCostForDay {
+	return &confluentCostForDay{
+		kafka: make(map[model.ClusterId]map[model.CostType]model.KafkaConfluentCost),
+	}
+}
+func (c *confluentCostForDay) setupClusters() {
+	for _, cluster := range model.ConfluentClusters {
+		c.kafka[cluster] = make(map[model.CostType]model.KafkaConfluentCost)
+	}
+}
+
 type ConfluentCostService struct {
 	// Can change from day to day, start with just keeping the latest
-	cachedKafkaCosts map[model.ClusterId]map[model.CostType]model.ConfluentCost
 
+	cachedCosts          map[utils.YearMonthDayDate]confluentCostForDay
 	confluentCloudClient *client.ConfluentCloudClient
 }
 
-func (c *ConfluentCostService) CacheCosts(costs model.ConfluentCostResponse) {
+func (c *ConfluentCostService) SetupTestCostsFromFile() bool {
+	byteData, err := os.ReadFile("data.json")
+	if err != nil {
+		return false
+	}
 
-	for _, cluster := range model.ConfluentClusters {
-		c.cachedKafkaCosts[cluster] = make(map[model.CostType]model.ConfluentCost)
+	var costs model.ConfluentCostResponse
+	err = json.Unmarshal(byteData, &costs)
+	if err != nil {
+		log.Err(err).Msgf("failed to unmarshal data.json")
+		return false
+	}
+
+	// try to deduce the date from the data
+	var date time.Time
+	for _, cost := range costs.Data {
+		if cost.StartDate == "" {
+			continue
+		}
+		date, err = time.Parse("2006-01-02", cost.StartDate)
+		if err != nil {
+			log.Err(err).Msgf("failed to parse date from data.json")
+			return false
+		}
+		break
+	}
+	if date.IsZero() {
+		log.Error().Msgf("no date found in data.json")
+		return false
+	}
+
+	c.CacheCosts(utils.ToYearMonthDayDate(date), costs)
+
+	return true
+}
+func NewConfluentCostService(confluentCloudClient *client.ConfluentCloudClient, useTestCosts bool) *ConfluentCostService {
+	manager := &ConfluentCostService{
+		cachedCosts:          make(map[utils.YearMonthDayDate]confluentCostForDay),
+		confluentCloudClient: confluentCloudClient,
+	}
+
+	if useTestCosts {
+		log.Info().Msgf("Using test costs")
+
+		if manager.SetupTestCostsFromFile() {
+			log.Info().Msgf("data.json found, using cached costs")
+			return manager
+		}
+		log.Fatal().Msgf("data.json not found!")
+
+	}
+	return manager
+}
+
+func (c *ConfluentCostService) CacheCosts(date utils.YearMonthDayDate, costs model.ConfluentCostResponse) {
+
+	if _, ok := c.cachedCosts[date]; !ok {
+		newCosts := newConfluentCostForDay()
+		newCosts.setupClusters()
+		c.cachedCosts[date] = *newCosts
 	}
 
 	for _, cost := range costs.Data {
@@ -48,7 +119,7 @@ func (c *ConfluentCostService) CacheCosts(costs model.ConfluentCostResponse) {
 				log.Error().Msgf("failed to parse cluster id: %s", err)
 				continue
 			}
-			c.cachedKafkaCosts[clusterId][costType] = model.ConfluentCost{
+			c.cachedCosts[date].kafka[clusterId][costType] = model.KafkaConfluentCost{
 				CostType:    costType,
 				ProductType: productType,
 				ClusterId:   clusterId,
@@ -61,95 +132,39 @@ func (c *ConfluentCostService) CacheCosts(costs model.ConfluentCostResponse) {
 	}
 }
 
-func (c *ConfluentCostService) SetupTestCostsFromFile() bool {
-	byteData, err := os.ReadFile("data.json")
+func (c *ConfluentCostService) GetKafkaCosts(date utils.YearMonthDayDate, clusterId model.ClusterId, costType model.CostType) (model.KafkaConfluentCost, error) {
+
+	costsForDay, ok := c.cachedCosts[date]
+	if !ok {
+		return model.KafkaConfluentCost{}, fmt.Errorf("no costs found for date %s", date)
+	}
+	kafkaCosts, ok := costsForDay.kafka[clusterId]
+	if !ok {
+		return model.KafkaConfluentCost{}, fmt.Errorf("no costs found for cluster %s", clusterId)
+	}
+
+	costOfType, ok := kafkaCosts[costType]
+	if !ok {
+		return model.KafkaConfluentCost{}, fmt.Errorf("no costs found for cost type: %s", costType)
+	}
+	return costOfType, nil
+}
+
+func (c *ConfluentCostService) HasCostsForDate(date utils.YearMonthDayDate) bool {
+	_, ok := c.cachedCosts[date]
+	return ok
+}
+
+func (c *ConfluentCostService) FetchAndCacheCosts(dayTime utils.YearMonthDayDate) {
+	costs, err := c.getCostsForDate(dayTime)
 	if err != nil {
-		return false
+		log.Err(err).Msgf("failed to get costs for date %s", dayTime)
+		return
 	}
-
-	var costs model.ConfluentCostResponse
-	err = json.Unmarshal(byteData, &costs)
-	if err != nil {
-		log.Err(err).Msgf("failed to unmarshal data.json")
-		return false
-	}
-
-	c.CacheCosts(costs)
-
-	return true
+	c.CacheCosts(dayTime, costs)
 }
 
-func (c *ConfluentCostService) SetupHardcodedTestCosts() {
-	for _, cluster := range model.ConfluentClusters {
-		c.cachedKafkaCosts[cluster] = make(map[model.CostType]model.ConfluentCost)
-		c.cachedKafkaCosts[cluster][model.CostTypeKafkaNetworkWrite] = model.ConfluentCost{
-			CostType:    model.CostTypeKafkaNetworkWrite,
-			ProductType: model.ProductTypeKafka,
-			ClusterId:   cluster,
-			CostPerUnit: 0.066,
-			CostUnit:    model.GB,
-			TotalCost:   1.23,
-		}
-
-		c.cachedKafkaCosts[cluster][model.CostTypeKafkaNetworkRead] = model.ConfluentCost{
-			CostType:    model.CostTypeKafkaNetworkRead,
-			ProductType: model.ProductTypeKafka,
-			ClusterId:   cluster,
-			CostPerUnit: 0.1265,
-			CostUnit:    model.GB,
-			TotalCost:   6.0624,
-		}
-
-		c.cachedKafkaCosts[cluster][model.CostTypeKafkaStorage] = model.ConfluentCost{
-			CostType:    model.CostTypeKafkaStorage,
-			ProductType: model.ProductTypeKafka,
-			ClusterId:   cluster,
-			CostPerUnit: 0.00012055,
-			TotalCost:   0.0181,
-			CostUnit:    model.GBHour,
-		}
-	}
-}
-
-func NewConfluentCostService(confluentCloudClient *client.ConfluentCloudClient, useTestCosts bool) *ConfluentCostService {
-	manager := &ConfluentCostService{
-		cachedKafkaCosts:     make(map[model.ClusterId]map[model.CostType]model.ConfluentCost),
-		confluentCloudClient: confluentCloudClient,
-	}
-
-	if useTestCosts {
-		log.Info().Msgf("Using test costs")
-
-		if manager.SetupTestCostsFromFile() {
-			log.Info().Msgf("data.json found, using cached costs")
-			return manager
-		}
-		log.Info().Msgf("data.json not found, using hardcoded test costs")
-		manager.SetupHardcodedTestCosts()
-	}
-	return manager
-}
-
-func (c *ConfluentCostService) GetKafkaCosts(clusterId model.ClusterId, costType model.CostType) (model.ConfluentCost, error) {
-	if costs, ok := c.cachedKafkaCosts[clusterId]; ok {
-		if cost, ok := costs[costType]; ok {
-			return cost, nil
-		}
-	}
-	return model.ConfluentCost{}, fmt.Errorf("no costs found for cluster %s", clusterId)
-}
-
-func (c *ConfluentCostService) HasCostsForDate(date time.Time) bool {
-	// TODO: Add cached costs per dates
-	// for now we just check if any costs are cached
-	_, err := c.GetKafkaCosts(model.ClusterIdProd, model.CostTypeKafkaNetworkWrite)
-	if err != nil {
-		return false
-	}
-	return true
-}
-
-func (c *ConfluentCostService) GetCostsForDate(date utils.YearMonthDayDate) (model.ConfluentCostResponse, error) {
+func (c *ConfluentCostService) getCostsForDate(date utils.YearMonthDayDate) (model.ConfluentCostResponse, error) {
 
 	toTime := date.ToTimeUTC()
 	fromTime := toTime.Add(-24 * time.Hour)
@@ -157,6 +172,6 @@ func (c *ConfluentCostService) GetCostsForDate(date utils.YearMonthDayDate) (mod
 	if err != nil {
 		return model.ConfluentCostResponse{}, err
 	}
-	c.CacheCosts(*costs)
+
 	return *costs, nil
 }

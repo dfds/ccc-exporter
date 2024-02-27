@@ -6,6 +6,7 @@ import (
 	"go.dfds.cloud/ccc-exporter/config"
 	"go.dfds.cloud/ccc-exporter/internal/client"
 	"go.dfds.cloud/ccc-exporter/internal/service"
+	"go.dfds.cloud/ccc-exporter/internal/utils"
 	"time"
 )
 
@@ -18,7 +19,7 @@ const (
 )
 
 type ExportProcess struct {
-	dayTime      time.Time
+	dayTime      utils.YearMonthDayDate
 	currentState ExportState
 }
 
@@ -39,20 +40,30 @@ func NewExporterApplication(prometheusClient *client.PrometheusClient, confluent
 	}
 }
 
-// SetupProcesses setup fetch processes for days looking back by checking if we have data locally for those days
-func (e *ExporterApplication) SetupProcesses(daysToLookBack int) {
-
+// SetupProcesses setup fetch processes for days looking back by daysToLookBack
+// For now only checks local exports and not in s3
+func (e *ExporterApplication) SetupProcesses(checkS3 bool, daysToLookBack int) {
 	e.exportProcesses = []ExportProcess{}
 
+	var daysToExport []utils.YearMonthDayDate
 	year, month, day := time.Now().UTC().Date()
-	now := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
-	for i := 1; i <= daysToLookBack; i++ {
-		date := now.Add(-time.Hour * time.Duration(i))
-		if e.HasExportedDataForDay(date) {
+	date := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < daysToLookBack; i++ {
+		date = date.Add(-time.Hour * 24)
+		daysToExport = append(daysToExport, utils.ToYearMonthDayDate(date))
+	}
+
+	if checkS3 {
+		log.Errorf("checking s3 for exported data is not implemented yet")
+	}
+
+	log.Infof("checking locally for exported data for the last %d days", daysToLookBack)
+	for _, yearMonthDayDate := range daysToExport {
+		if e.HasExportedDataForDay(yearMonthDayDate) {
 			continue
 		}
 		e.exportProcesses = append(e.exportProcesses, ExportProcess{
-			dayTime:      date,
+			dayTime:      yearMonthDayDate,
 			currentState: ExportStateNeedCosts,
 		})
 	}
@@ -65,19 +76,26 @@ func (e *ExporterApplication) Work(config config.Worker) {
 	}
 
 	for {
-		e.SetupProcesses(config.DaysToLookBack)
 		if len(e.exportProcesses) == 0 {
-			fmt.Println("No data to be exported")
-			time.Sleep(sleepInterval)
-			continue
+			e.SetupProcesses(config.CheckForExportedDataInS3, config.DaysToLookBack)
+			if len(e.exportProcesses) == 0 {
+				log.Infof("no more work to do, sleeping for %s", sleepInterval)
+				time.Sleep(sleepInterval)
+				continue
+			}
 		}
 
 		for i, process := range e.exportProcesses {
 			switch process.currentState {
 			case ExportStateNeedCosts:
 				if !e.costService.HasCostsForDate(process.dayTime) {
-					continue
+					e.costService.FetchAndCacheCosts(process.dayTime)
+					if !e.costService.HasCostsForDate(process.dayTime) {
+						log.Errorf("unable to fetch costs for %s", process.dayTime)
+						continue
+					}
 				}
+				log.Infof("successfully found confluent costs for %s", process.dayTime)
 				e.exportProcesses[i].currentState = ExportStateNeedPrometheusUsageData
 			case ExportStateNeedPrometheusUsageData:
 				data, err := e.gathererService.GetMetricsForDay(process.dayTime)
@@ -91,7 +109,14 @@ func (e *ExporterApplication) Work(config config.Worker) {
 					continue
 				}
 				e.exportProcesses[i].currentState = ExportStateDone
-				log.Infof("successfully export cost data for %s", process.dayTime)
+				log.Infof("successfully exported cost data for %s", process.dayTime)
+			}
+		}
+
+		// remove done processes
+		for i := len(e.exportProcesses) - 1; i >= 0; i-- {
+			if e.exportProcesses[i].currentState == ExportStateDone {
+				e.exportProcesses = append(e.exportProcesses[:i], e.exportProcesses[i+1:]...)
 			}
 		}
 
