@@ -34,11 +34,12 @@ type ExporterApplication struct {
 	exportProcesses []ExportProcess
 }
 
-func NewExporterApplication(prometheusClient *client.PrometheusClient, confluentClient *client.ConfluentCloudClient) ExporterApplication {
+func NewExporterApplication(prometheusClient *client.PrometheusClient, confluentClient *client.ConfluentCloudClient, s3Client *client.S3Client) ExporterApplication {
 
 	return ExporterApplication{
 		gathererService: service.NewGatherer(prometheusClient),
 		costService:     service.NewConfluentCostService(confluentClient, true),
+		s3Client:        s3Client,
 	}
 }
 

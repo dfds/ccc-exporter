@@ -45,7 +45,7 @@ func (c *ConfluentCloudClient) GetCosts(from time.Time, to time.Time) (*model.Co
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("got status code %d when getting confluent costs", resp.StatusCode)
+		return nil, fmt.Errorf("got response %s when attempting to get confluent costs", resp.Status)
 	}
 
 	defer resp.Body.Close()
