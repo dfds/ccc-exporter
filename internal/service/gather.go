@@ -5,19 +5,19 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.dfds.cloud/ccc-exporter/internal/client"
 	"go.dfds.cloud/ccc-exporter/internal/model"
-	"go.dfds.cloud/ccc-exporter/internal/utils"
+	"go.dfds.cloud/ccc-exporter/internal/util"
 	"strconv"
 	"time"
 )
 
 type GathererService struct {
 	client      *client.PrometheusClient
-	cachedUsage map[utils.YearMonthDayDate]model.MetricsDataForDay
+	cachedUsage map[util.YearMonthDayDate]model.MetricsDataForDay
 }
 
 func NewGatherer(client *client.PrometheusClient) *GathererService {
 	return &GathererService{client: client,
-		cachedUsage: make(map[utils.YearMonthDayDate]model.MetricsDataForDay)}
+		cachedUsage: make(map[util.YearMonthDayDate]model.MetricsDataForDay)}
 }
 
 type AllMetricsResponse struct {
@@ -26,14 +26,25 @@ type AllMetricsResponse struct {
 }
 
 func getQueryForMetric(metricKey model.MetricKey, timeDiffInSeconds int) string {
-	innerQuery := fmt.Sprintf("%s[1d] offset %ds", metricKey, timeDiffInSeconds)
 	if metricKey == model.ConfluentKafkaServerRetainedBytes {
-		return innerQuery
+		return fmt.Sprintf("%s offset %ds", metricKey, timeDiffInSeconds)
 	}
+	innerQuery := fmt.Sprintf("%s[1d] offset %ds", metricKey, timeDiffInSeconds)
 	return fmt.Sprintf("sum_over_time(%s)", innerQuery)
 }
 
-func (g *GathererService) GetMetricsForDay(targetTime utils.YearMonthDayDate) (model.MetricsDataForDay, error) {
+func getTotalPerCluster(metricKey model.MetricKey, costs model.MetricsDataForDay) map[model.ClusterId]float64 {
+	costsPerCluster := make(map[model.ClusterId]float64)
+
+	for clusterId, m := range costs.Topics[metricKey] {
+		for _, data := range m {
+			costsPerCluster[clusterId] += data.Value
+		}
+	}
+	return costsPerCluster
+}
+
+func (g *GathererService) GetMetricsForDay(targetTime util.YearMonthDayDate) (model.MetricsDataForDay, error) {
 
 	now := time.Now().UTC()
 
@@ -57,6 +68,7 @@ func (g *GathererService) GetMetricsForDay(targetTime utils.YearMonthDayDate) (m
 
 	for _, metricKey := range model.ConfluentMetrics {
 		query := getQueryForMetric(metricKey, timeDiffInSeconds)
+		log.Info().Msgf("querying prometheus with: %s", query)
 		queryResp, err := g.client.Query(query, float64(now.Unix()))
 		if err != nil {
 			return model.MetricsDataForDay{}, err
@@ -90,9 +102,17 @@ func (g *GathererService) GetMetricsForDay(targetTime utils.YearMonthDayDate) (m
 		}
 	}
 
-	g.cachedUsage[targetTime] = model.MetricsDataForDay{
+	costs := model.MetricsDataForDay{
 		DayDate: targetTime,
 		Topics:  metricsForDayAndTopic,
+	}
+
+	costs.TotalCostPerClusterReadBytes = getTotalPerCluster(model.ConfluentKafkaServerReceivedBytes, costs)
+	costs.TotalCostPerClusterWrittenBytes = getTotalPerCluster(model.ConfluentKafkaServerSentBytes, costs)
+
+	for _, clusterId := range model.ConfluentClusters {
+		costs.TotalCostReadBytes += costs.TotalCostPerClusterReadBytes[clusterId]
+		costs.TotalCostWrittenBytes += costs.TotalCostPerClusterWrittenBytes[clusterId]
 	}
 
 	return g.cachedUsage[targetTime], nil

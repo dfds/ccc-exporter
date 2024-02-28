@@ -6,7 +6,7 @@ import (
 	"go.dfds.cloud/ccc-exporter/config"
 	"go.dfds.cloud/ccc-exporter/internal/client"
 	"go.dfds.cloud/ccc-exporter/internal/service"
-	"go.dfds.cloud/ccc-exporter/internal/utils"
+	"go.dfds.cloud/ccc-exporter/internal/util"
 	"time"
 )
 
@@ -15,13 +15,13 @@ type ExportState string
 const (
 	ExportStateNeedCosts               ExportState = "NEED_COSTS"
 	ExportStateNeedPrometheusUsageData ExportState = "NEED_PROMETHEUS_USAGE_DATA"
-	ExportStateNeedLocalCSVExport                  = "NEED_LOCAL_CSV_EXPORT"
+	ExportStateNeedLocalCSVExport      ExportState = "NEED_LOCAL_CSV_EXPORT"
 	ExportStateNeedToPutCSVInS3        ExportState = "NEED_TO_PUT_CSV_IN_S3"
 	ExportStateDone                    ExportState = "DONE"
 )
 
 type ExportProcess struct {
-	dayTime      utils.YearMonthDayDate
+	dayTime      util.YearMonthDayDate
 	currentState ExportState
 }
 
@@ -48,12 +48,12 @@ func NewExporterApplication(prometheusClient *client.PrometheusClient, confluent
 func (e *ExporterApplication) SetupProcesses(checkS3 bool, daysToLookBack int) {
 	e.exportProcesses = []ExportProcess{}
 
-	var daysToExport []utils.YearMonthDayDate
+	var daysToExport []util.YearMonthDayDate
 	year, month, day := time.Now().UTC().Date()
 	date := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 	for i := 0; i < daysToLookBack; i++ {
 		date = date.Add(-time.Hour * 24)
-		daysToExport = append(daysToExport, utils.ToYearMonthDayDate(date))
+		daysToExport = append(daysToExport, util.ToYearMonthDayDate(date))
 	}
 
 	if checkS3 {
@@ -67,7 +67,7 @@ func (e *ExporterApplication) SetupProcesses(checkS3 bool, daysToLookBack int) {
 		}
 		e.exportProcesses = append(e.exportProcesses, ExportProcess{
 			dayTime:      yearMonthDayDate,
-			currentState: ExportStateNeedCosts,
+			currentState: ExportStateNeedPrometheusUsageData,
 		})
 	}
 }

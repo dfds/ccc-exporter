@@ -52,6 +52,7 @@ func (c *PrometheusClient) Query(query string, time float64) (*QueryResponse, er
 	return payload, err
 }
 
+// TODO: Revisit to figure out why this looks like it does
 func ResultToVector(data []interface{}) ([]Vector, error) {
 	var casted []vectorMidParse
 	for _, d := range data {
@@ -72,10 +73,12 @@ func ResultToVector(data []interface{}) ([]Vector, error) {
 	for _, vec := range casted {
 		newVec := Vector{
 			Metric: VectorMetricLabel{
-				Instance: vec.Metric.Instance,
-				Job:      vec.Metric.Job,
-				KafkaID:  vec.Metric.KafkaID,
-				Topic:    vec.Metric.Topic,
+				Instance:    vec.Metric.Instance,
+				Job:         vec.Metric.Job,
+				KafkaID:     vec.Metric.KafkaID,
+				Topic:       vec.Metric.Topic,
+				PrincipalId: vec.Metric.PrincipalId,
+				Type:        vec.Metric.Type,
 			},
 			Value: VectorValue{},
 		}
@@ -93,10 +96,12 @@ type Vector struct {
 }
 
 type VectorMetricLabel struct {
-	Instance string `json:"instance"`
-	Job      string `json:"job"`
-	KafkaID  string `json:"kafka_id"`
-	Topic    string `json:"topic"`
+	Instance    string `json:"instance"`
+	Job         string `json:"job"`
+	KafkaID     string `json:"kafka_id"`
+	Topic       string `json:"topic"`
+	PrincipalId string `json:"principal_id"`
+	Type        string `json:"type"`
 }
 
 type VectorValue struct {
@@ -106,10 +111,12 @@ type VectorValue struct {
 
 type vectorMidParse struct {
 	Metric struct {
-		Instance string `json:"instance"`
-		Job      string `json:"job"`
-		KafkaID  string `json:"kafka_id"`
-		Topic    string `json:"topic"`
+		Instance    string `json:"instance"`
+		Job         string `json:"job"`
+		KafkaID     string `json:"kafka_id"`
+		Topic       string `json:"topic"`
+		PrincipalId string `json:"principal_id"`
+		Type        string `json:"type"`
 	} `json:"metric"`
 	Value []interface{} `json:"value"`
 }

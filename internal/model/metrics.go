@@ -1,6 +1,6 @@
 package model
 
-import "go.dfds.cloud/ccc-exporter/internal/utils"
+import "go.dfds.cloud/ccc-exporter/internal/util"
 
 type MetricKey string
 
@@ -8,13 +8,20 @@ const (
 	ConfluentKafkaServerReceivedBytes MetricKey = "confluent_kafka_server_received_bytes"
 	ConfluentKafkaServerSentBytes     MetricKey = "confluent_kafka_server_sent_bytes"
 	ConfluentKafkaServerRetainedBytes MetricKey = "confluent_kafka_server_retained_bytes"
+	ConfluentKafkaServerResponseBytes MetricKey = "confluent_kafka_server_response_bytes"
+	ConfluentKafkaServerRequestBytes  MetricKey = "confluent_kafka_server_request_bytes"
 )
 
-var ConfluentMetrics = []MetricKey{ConfluentKafkaServerReceivedBytes, ConfluentKafkaServerSentBytes, ConfluentKafkaServerRetainedBytes}
+var ConfluentMetrics = []MetricKey{
+	ConfluentKafkaServerReceivedBytes,
+	ConfluentKafkaServerSentBytes,
+	ConfluentKafkaServerRetainedBytes,
+	ConfluentKafkaServerResponseBytes,
+	ConfluentKafkaServerRequestBytes}
 
 func (m MetricKey) IsValid() bool {
 	switch m {
-	case ConfluentKafkaServerReceivedBytes, ConfluentKafkaServerSentBytes, ConfluentKafkaServerRetainedBytes:
+	case ConfluentKafkaServerReceivedBytes, ConfluentKafkaServerSentBytes, ConfluentKafkaServerRetainedBytes, ConfluentKafkaServerResponseBytes, ConfluentKafkaServerRequestBytes:
 		return true
 	}
 	return false
@@ -27,6 +34,10 @@ func (m MetricKey) ToCsvFormatString() string {
 		return "written-bytes"
 	case ConfluentKafkaServerRetainedBytes:
 		return "stored-bytes"
+	case ConfluentKafkaServerResponseBytes:
+		return "response-bytes"
+	case ConfluentKafkaServerRequestBytes:
+		return "request-bytes"
 	}
 	return "INVALID"
 }
@@ -43,8 +54,14 @@ func (m MetricKey) ToConfluentCostType() CostType {
 }
 
 type MetricsDataForDay struct {
-	DayDate utils.YearMonthDayDate
+	DayDate util.YearMonthDayDate
 	Topics  map[MetricKey]map[ClusterId]map[TopicName]MetricData
+
+	TotalCostPerClusterWrittenBytes map[ClusterId]float64
+	TotalCostPerClusterReadBytes    map[ClusterId]float64
+
+	TotalCostWrittenBytes float64
+	TotalCostReadBytes    float64
 }
 
 type MetricData struct {

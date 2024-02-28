@@ -6,7 +6,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.dfds.cloud/ccc-exporter/internal/client"
 	"go.dfds.cloud/ccc-exporter/internal/model"
-	"go.dfds.cloud/ccc-exporter/internal/utils"
+	"go.dfds.cloud/ccc-exporter/internal/util"
 	"os"
 	"time"
 )
@@ -29,7 +29,7 @@ func (c *confluentCostForDay) setupClusters() {
 type ConfluentCostService struct {
 	// Can change from day to day, start with just keeping the latest
 
-	cachedCosts          map[utils.YearMonthDayDate]confluentCostForDay
+	cachedCosts          map[util.YearMonthDayDate]confluentCostForDay
 	confluentCloudClient *client.ConfluentCloudClient
 }
 
@@ -64,13 +64,13 @@ func (c *ConfluentCostService) SetupTestCostsFromFile() bool {
 		return false
 	}
 
-	c.CacheCosts(utils.ToYearMonthDayDate(date), costs)
+	c.CacheCosts(util.ToYearMonthDayDate(date), costs)
 
 	return true
 }
 func NewConfluentCostService(confluentCloudClient *client.ConfluentCloudClient, useTestCosts bool) *ConfluentCostService {
 	manager := &ConfluentCostService{
-		cachedCosts:          make(map[utils.YearMonthDayDate]confluentCostForDay),
+		cachedCosts:          make(map[util.YearMonthDayDate]confluentCostForDay),
 		confluentCloudClient: confluentCloudClient,
 	}
 
@@ -87,7 +87,7 @@ func NewConfluentCostService(confluentCloudClient *client.ConfluentCloudClient, 
 	return manager
 }
 
-func (c *ConfluentCostService) CacheCosts(date utils.YearMonthDayDate, costs model.ConfluentCostResponse) {
+func (c *ConfluentCostService) CacheCosts(date util.YearMonthDayDate, costs model.ConfluentCostResponse) {
 
 	if _, ok := c.cachedCosts[date]; !ok {
 		newCosts := newConfluentCostForDay()
@@ -132,7 +132,7 @@ func (c *ConfluentCostService) CacheCosts(date utils.YearMonthDayDate, costs mod
 	}
 }
 
-func (c *ConfluentCostService) GetKafkaCosts(date utils.YearMonthDayDate, clusterId model.ClusterId, costType model.CostType) (model.KafkaConfluentCost, error) {
+func (c *ConfluentCostService) GetKafkaCosts(date util.YearMonthDayDate, clusterId model.ClusterId, costType model.CostType) (model.KafkaConfluentCost, error) {
 
 	costsForDay, ok := c.cachedCosts[date]
 	if !ok {
@@ -150,12 +150,12 @@ func (c *ConfluentCostService) GetKafkaCosts(date utils.YearMonthDayDate, cluste
 	return costOfType, nil
 }
 
-func (c *ConfluentCostService) HasCostsForDate(date utils.YearMonthDayDate) bool {
+func (c *ConfluentCostService) HasCostsForDate(date util.YearMonthDayDate) bool {
 	_, ok := c.cachedCosts[date]
 	return ok
 }
 
-func (c *ConfluentCostService) FetchAndCacheCosts(dayTime utils.YearMonthDayDate) {
+func (c *ConfluentCostService) FetchAndCacheCosts(dayTime util.YearMonthDayDate) {
 	costs, err := c.getCostsForDate(dayTime)
 	if err != nil {
 		log.Err(err).Msgf("failed to get costs for date %s", dayTime)
@@ -164,7 +164,7 @@ func (c *ConfluentCostService) FetchAndCacheCosts(dayTime utils.YearMonthDayDate
 	c.CacheCosts(dayTime, costs)
 }
 
-func (c *ConfluentCostService) getCostsForDate(date utils.YearMonthDayDate) (model.ConfluentCostResponse, error) {
+func (c *ConfluentCostService) getCostsForDate(date util.YearMonthDayDate) (model.ConfluentCostResponse, error) {
 
 	toTime := date.ToTimeUTC()
 	fromTime := toTime.Add(-24 * time.Hour)

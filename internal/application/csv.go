@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"github.com/gofiber/fiber/v2/log"
 	"go.dfds.cloud/ccc-exporter/internal/model"
-	"go.dfds.cloud/ccc-exporter/internal/utils"
+	"go.dfds.cloud/ccc-exporter/internal/util"
 	"os"
 	"path/filepath"
 )
 import "encoding/csv"
 
-const CostsExportDir = "exports"
+const CostsExportDir = "export"
 
-func getFilenameForDay(date utils.YearMonthDayDate) string {
+func getFilenameForDay(date util.YearMonthDayDate) string {
 	return fmt.Sprintf("%d_%d_%d.csv", date.Year, date.Month, date.Day)
 }
 
@@ -60,7 +60,7 @@ func (e *ExporterApplication) TryAddLine(writer *csv.Writer, data model.MetricsD
 	}
 }
 
-func (e *ExporterApplication) ReadCsvRaw(date utils.YearMonthDayDate) ([]byte, error) {
+func (e *ExporterApplication) ReadCsvRaw(date util.YearMonthDayDate) ([]byte, error) {
 	byteData, err := os.ReadFile(getFilenameForDay(date))
 	if err != nil {
 		return nil, err
@@ -103,7 +103,7 @@ func (e *ExporterApplication) WriteCSV(data model.MetricsDataForDay) error {
 	return nil
 }
 
-func (e *ExporterApplication) HasExportedDataForDay(date utils.YearMonthDayDate) bool {
+func (e *ExporterApplication) HasExportedDataForDay(date util.YearMonthDayDate) bool {
 
 	err := e.EnsureCSVDataFolderExists()
 	if err != nil {
