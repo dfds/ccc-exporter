@@ -16,8 +16,11 @@ var ConfluentMetrics = []MetricKey{
 	ConfluentKafkaServerReceivedBytes,
 	ConfluentKafkaServerSentBytes,
 	ConfluentKafkaServerRetainedBytes,
-	ConfluentKafkaServerResponseBytes,
-	ConfluentKafkaServerRequestBytes}
+
+	// TODO: Re enable when whole flow works
+	//ConfluentKafkaServerResponseBytes,
+	//ConfluentKafkaServerRequestBytes
+}
 
 func (m MetricKey) IsValid() bool {
 	switch m {
