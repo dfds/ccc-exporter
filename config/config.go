@@ -17,8 +17,9 @@ type Confluent struct {
 }
 
 type S3 struct {
-	BucketName string `mapstructure:"bucketName"`
-	BucketKey  string `mapstructure:"bucketKey"`
+	BucketName string `mapstructure:"bucketName"  env:"CCC_EXPORTER_S3_BUCKET_NAME"`
+	BucketKey  string `mapstructure:"bucketKey" env:"CCC_EXPORTER_S3_BUCKET_KEY"`
+	Region     string `mapstructure:"region"`
 }
 
 type Config struct {

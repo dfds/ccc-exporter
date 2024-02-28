@@ -67,7 +67,7 @@ func (e *ExporterApplication) SetupProcesses(checkS3 bool, daysToLookBack int) {
 		}
 		e.exportProcesses = append(e.exportProcesses, ExportProcess{
 			dayTime:      yearMonthDayDate,
-			currentState: ExportStateNeedPrometheusUsageData,
+			currentState: ExportStateNeedCosts,
 		})
 	}
 }
@@ -127,7 +127,7 @@ func (e *ExporterApplication) Work(config config.Worker, s3Config config.S3) {
 					log.Errorf("unable to find csv locally %s", process.dayTime, err)
 					continue
 				}
-				err = e.s3Client.PutObject(s3Config.BucketName, s3Config.BucketKey, data)
+				err = e.s3Client.PutObject(s3Config.BucketName, fmt.Sprintf("%s/%s", s3Config.BucketKey, process.dayTime.ToFileNameFormat()), data)
 				if err != nil {
 					log.Errorf("unable to put csv in s3 for %s: %s", process.dayTime, err)
 					continue

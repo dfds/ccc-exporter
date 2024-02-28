@@ -102,18 +102,20 @@ func (g *GathererService) GetMetricsForDay(targetTime util.YearMonthDayDate) (mo
 		}
 	}
 
-	costs := model.MetricsDataForDay{
+	metricsDataForDay := model.MetricsDataForDay{
 		DayDate: targetTime,
 		Topics:  metricsForDayAndTopic,
 	}
 
-	costs.TotalCostPerClusterReadBytes = getTotalPerCluster(model.ConfluentKafkaServerReceivedBytes, costs)
-	costs.TotalCostPerClusterWrittenBytes = getTotalPerCluster(model.ConfluentKafkaServerSentBytes, costs)
+	metricsDataForDay.TotalCostPerClusterReadBytes = getTotalPerCluster(model.ConfluentKafkaServerReceivedBytes, metricsDataForDay)
+	metricsDataForDay.TotalCostPerClusterWrittenBytes = getTotalPerCluster(model.ConfluentKafkaServerSentBytes, metricsDataForDay)
 
 	for _, clusterId := range model.ConfluentClusters {
-		costs.TotalCostReadBytes += costs.TotalCostPerClusterReadBytes[clusterId]
-		costs.TotalCostWrittenBytes += costs.TotalCostPerClusterWrittenBytes[clusterId]
+		metricsDataForDay.TotalCostReadBytes += metricsDataForDay.TotalCostPerClusterReadBytes[clusterId]
+		metricsDataForDay.TotalCostWrittenBytes += metricsDataForDay.TotalCostPerClusterWrittenBytes[clusterId]
 	}
+
+	g.cachedUsage[targetTime] = metricsDataForDay
 
 	return g.cachedUsage[targetTime], nil
 }

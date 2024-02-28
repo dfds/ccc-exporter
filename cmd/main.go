@@ -41,6 +41,7 @@ func main() {
 		log.Fatal().Err(err).Msg("Failed to load AWS config")
 	}
 
+	loadedAwsConfig.Region = loadedConfig.S3.Region
 	s3Client, err := client.NewS3Client(loadedAwsConfig)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create S3 client")

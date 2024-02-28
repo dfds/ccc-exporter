@@ -2,5 +2,8 @@
   "worker": {
     "intervalSeconds": 60,
     "daysToLookBack": 7
+  },
+  "s3": {
+    "region": "eu-central-1"
   }
 }

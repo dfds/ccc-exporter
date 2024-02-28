@@ -12,10 +12,6 @@ import "encoding/csv"
 
 const CostsExportDir = "export"
 
-func getFilenameForDay(date util.YearMonthDayDate) string {
-	return fmt.Sprintf("%d_%d_%d.csv", date.Year, date.Month, date.Day)
-}
-
 func (e *ExporterApplication) EnsureCSVDataFolderExists() error {
 	err := os.MkdirAll(CostsExportDir, 0755)
 	if err != nil {
@@ -25,7 +21,7 @@ func (e *ExporterApplication) EnsureCSVDataFolderExists() error {
 }
 
 func calcCost(m model.MetricData, costs model.KafkaConfluentCost) float64 {
-	inGB := m.Value * 1024 * 1024 * 1024
+	inGB := m.Value / 1024 / 1024 / 1024
 	switch costs.CostUnit {
 	case model.GB:
 		return inGB * costs.CostPerUnit
@@ -61,7 +57,8 @@ func (e *ExporterApplication) TryAddLine(writer *csv.Writer, data model.MetricsD
 }
 
 func (e *ExporterApplication) ReadCsvRaw(date util.YearMonthDayDate) ([]byte, error) {
-	byteData, err := os.ReadFile(getFilenameForDay(date))
+	pathToFile := filepath.Join(CostsExportDir, date.ToFileNameFormat())
+	byteData, err := os.ReadFile(pathToFile)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +72,7 @@ func (e *ExporterApplication) WriteCSV(data model.MetricsDataForDay) error {
 		return err
 	}
 
-	pathToFile := filepath.Join(CostsExportDir, getFilenameForDay(data.DayDate))
+	pathToFile := filepath.Join(CostsExportDir, data.DayDate.ToFileNameFormat())
 	_, err = os.Stat(pathToFile)
 	if err == nil {
 		return fmt.Errorf("file %s already exists", pathToFile)
@@ -110,7 +107,7 @@ func (e *ExporterApplication) HasExportedDataForDay(date util.YearMonthDayDate) 
 		return false
 	}
 
-	pathToFile := filepath.Join(CostsExportDir, getFilenameForDay(date))
+	pathToFile := filepath.Join(CostsExportDir, date.ToFileNameFormat())
 	_, err = os.Stat(pathToFile)
 	return err == nil
 }

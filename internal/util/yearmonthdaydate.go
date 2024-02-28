@@ -1,6 +1,9 @@
 package util
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 type YearMonthDayDate struct {
 	Year  int
@@ -13,6 +16,10 @@ func (d YearMonthDayDate) ToCSVString() string {
 }
 func (d YearMonthDayDate) ToTimeUTC() time.Time {
 	return time.Date(d.Year, time.Month(d.Month), d.Day, 0, 0, 0, 0, time.UTC)
+}
+
+func (d YearMonthDayDate) ToFileNameFormat() string {
+	return fmt.Sprintf("%d_%d_%d.csv", d.Year, d.Month, d.Day)
 }
 
 func (d YearMonthDayDate) String() string {
