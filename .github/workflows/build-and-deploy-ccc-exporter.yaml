@@ -39,7 +39,7 @@ jobs:
         dockerfile_path: Dockerfile
         context_path: '.'
         tag: 'latest'
-        repo: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-central-1.amazonaws.com/ccc-exporter
+        repo: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-west-1.amazonaws.com/ccc-exporter
         role_arn: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecr-push-gh
         aws_region: 'eu-west-1'
     - run: 'echo "$KUBECONFIG" > /tmp/kubeconfig'
