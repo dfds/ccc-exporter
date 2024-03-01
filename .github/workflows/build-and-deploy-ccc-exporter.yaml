@@ -33,6 +33,7 @@ jobs:
       run:
         shell: bash
     steps:
+    - uses: actions/checkout@v3
     - uses: ./.github/actions/build_push_container_ecr
       with:
         dockerfile_path: Dockerfile
