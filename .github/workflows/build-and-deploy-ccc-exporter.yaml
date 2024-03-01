@@ -1,0 +1,54 @@
+name: ccc-exporter - deploy / build
+
+on:
+  push:
+    branches:
+      - 'master'
+    paths:
+      - 'cmd/**'
+      - 'config/**'
+      - 'internal/**'
+      - 'export/**'
+      - 'Dockerfile'
+      - 'k8s/**'
+  workflow_dispatch:
+    inputs:
+      deploy:
+        default: false
+        required: false
+        type: boolean
+        description: "Trigger build"
+permissions:
+  id-token: write # This is required for requesting the JWT
+  contents: read  # This is required for actions/checkout
+jobs:
+  deploy:
+    name:  '01 - Linux'
+    runs-on: [ubuntu-22.04]
+    strategy:
+      matrix:
+        arch: ['x86_64']
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - uses: .github/actions/build_push_container_ecr
+      with:
+        dockerfile_path: Dockerfile
+        context_path: '.'
+        tag: 'latest'
+        repo: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-central-1.amazonaws.com/ccc-exporter
+        role_arn: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecr-push-gh
+        aws_region: 'eu-west-1'
+    - run: 'echo "$KUBECONFIG" > /tmp/kubeconfig'
+      shell: bash
+      env:
+        KUBECONFIG: ${{secrets.KUBECONFIG}}
+    - uses: azure/setup-kubectl@v3
+      id: "apply"
+    - name: 'Deploy manifest with Kubectl'
+      env:
+        KUBECONFIG: '/tmp/kubeconfig'
+        NAMESPACE: 'developerautomation-xavgy'
+      run: |
+        kubectl apply -f k8s/deployment.yaml

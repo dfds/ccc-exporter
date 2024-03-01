@@ -6,10 +6,10 @@ COPY go.mod ./
 COPY go.sum ./
 
 COPY internal /app/internal
-COPY cmds /app/cmds
+COPY . /app/.
 COPY conf /app/conf
 
-RUN go build -o /app/client /app/cmds/main.go
+RUN go build -o /app/client /app/cmd/main.go
 
 FROM golang:1.21-alpine
 
