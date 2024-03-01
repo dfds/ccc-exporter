@@ -3,24 +3,24 @@ package client
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"io"
-	"log"
 	"net/http"
 )
 
-type Client struct {
+type PrometheusClient struct {
 	endpoint string
 	http     *http.Client
 }
 
-func NewClient(endpoint string) *Client {
-	return &Client{
+func NewPrometheusClient(endpoint string) *PrometheusClient {
+	return &PrometheusClient{
 		endpoint: endpoint,
 		http:     http.DefaultClient,
 	}
 }
 
-func (c *Client) Query(query string, time float64) (*QueryResponse, error) {
+func (c *PrometheusClient) Query(query string, time float64) (*QueryResponse, error) {
 	//req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/v1/query_range", c.endpoint), nil)
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/v1/query", c.endpoint), nil)
 	if err != nil {
@@ -52,17 +52,18 @@ func (c *Client) Query(query string, time float64) (*QueryResponse, error) {
 	return payload, err
 }
 
+// TODO: Revisit to figure out why this looks like it does
 func ResultToVector(data []interface{}) ([]Vector, error) {
 	var casted []vectorMidParse
 	for _, d := range data {
 		var deserialised vectorMidParse
 		serialised, err := json.Marshal(d)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal().Err(err).Msg("error serialising prometheus response")
 		}
 		err = json.Unmarshal(serialised, &deserialised)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal().Err(err).Msgf("error deserialising prometheus response: %s", string(serialised))
 		}
 
 		casted = append(casted, deserialised)
@@ -72,10 +73,12 @@ func ResultToVector(data []interface{}) ([]Vector, error) {
 	for _, vec := range casted {
 		newVec := Vector{
 			Metric: VectorMetricLabel{
-				Instance: vec.Metric.Instance,
-				Job:      vec.Metric.Job,
-				KafkaID:  vec.Metric.KafkaID,
-				Topic:    vec.Metric.Topic,
+				Instance:    vec.Metric.Instance,
+				Job:         vec.Metric.Job,
+				KafkaID:     vec.Metric.KafkaID,
+				Topic:       vec.Metric.Topic,
+				PrincipalId: vec.Metric.PrincipalId,
+				Type:        vec.Metric.Type,
 			},
 			Value: VectorValue{},
 		}
@@ -93,10 +96,12 @@ type Vector struct {
 }
 
 type VectorMetricLabel struct {
-	Instance string `json:"instance"`
-	Job      string `json:"job"`
-	KafkaID  string `json:"kafka_id"`
-	Topic    string `json:"topic"`
+	Instance    string `json:"instance"`
+	Job         string `json:"job"`
+	KafkaID     string `json:"kafka_id"`
+	Topic       string `json:"topic"`
+	PrincipalId string `json:"principal_id"`
+	Type        string `json:"type"`
 }
 
 type VectorValue struct {
@@ -106,10 +111,12 @@ type VectorValue struct {
 
 type vectorMidParse struct {
 	Metric struct {
-		Instance string `json:"instance"`
-		Job      string `json:"job"`
-		KafkaID  string `json:"kafka_id"`
-		Topic    string `json:"topic"`
+		Instance    string `json:"instance"`
+		Job         string `json:"job"`
+		KafkaID     string `json:"kafka_id"`
+		Topic       string `json:"topic"`
+		PrincipalId string `json:"principal_id"`
+		Type        string `json:"type"`
 	} `json:"metric"`
 	Value []interface{} `json:"value"`
 }
