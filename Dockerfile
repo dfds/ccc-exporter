@@ -7,7 +7,6 @@ COPY go.sum ./
 
 COPY internal /app/internal
 COPY . /app/.
-COPY conf /app/conf
 
 RUN go build -o /app/client /app/cmd/main.go
 
