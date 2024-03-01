@@ -11,6 +11,7 @@ on:
       - 'export/**'
       - 'Dockerfile'
       - 'k8s/**'
+      - '.github/workflows/build-and-deploy-ccc-exporter.yaml'
   workflow_dispatch:
     inputs:
       deploy:
@@ -32,7 +33,7 @@ jobs:
       run:
         shell: bash
     steps:
-    - uses: .github/actions/build_push_container_ecr
+    - uses: ./.github/actions/build_push_container_ecr
       with:
         dockerfile_path: Dockerfile
         context_path: '.'
