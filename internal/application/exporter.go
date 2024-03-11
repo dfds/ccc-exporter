@@ -38,7 +38,7 @@ func NewExporterApplication(prometheusClient *client.PrometheusClient, confluent
 
 	return ExporterApplication{
 		gathererService: service.NewGatherer(prometheusClient),
-		costService:     service.NewConfluentCostService(confluentClient, true),
+		costService:     service.NewConfluentCostService(confluentClient, false),
 		s3Client:        s3Client,
 	}
 }
