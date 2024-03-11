@@ -34,14 +34,6 @@ jobs:
         shell: bash
     steps:
     - uses: actions/checkout@v3
-    - name: 'Replace tokens in k8s manifests'
-      uses: cschleiden/replace-tokens@v1.1
-      with:
-        tokenPrefix: '$('
-        tokenSuffix: ')'
-        files: '["k8s/*.yaml"]'
-      env:
-        image_tag: ${{ steps.build_push_container_ecr.outputs.sha }}
     - uses: ./.github/actions/build_push_container_ecr
       with:
         dockerfile_path: Dockerfile
@@ -50,6 +42,14 @@ jobs:
         repo: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-west-1.amazonaws.com/ccc-exporter
         role_arn: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecr-push-gh
         aws_region: 'eu-west-1'
+    - name: 'Replace tokens in k8s manifests'
+      uses: cschleiden/replace-tokens@v1.1
+      with:
+        tokenPrefix: '$('
+        tokenSuffix: ')'
+        files: '["k8s/*.yaml"]'
+      env:
+        image_tag: ${{ steps.build_push_container_ecr.outputs.sha }}
     - run: 'echo "$KUBECONFIG" > /tmp/kubeconfig'
       shell: bash
       env:
