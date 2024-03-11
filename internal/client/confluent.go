@@ -35,11 +35,9 @@ func (c *ConfluentCloudClient) GetCosts(from time.Time, to time.Time) (*model.Co
 
 	queryValues := req.URL.Query()
 	queryValues.Add("start_date", from.Format("2006-01-02"))
-	queryValues.Add("end_date", from.Format("2006-01-02"))
+	queryValues.Add("end_date", to.Format("2006-01-02"))
 	req.URL.RawQuery = queryValues.Encode()
-
 	req.SetBasicAuth(c.config.ApiKeyId, c.config.ApiKeySecret)
-
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, err
