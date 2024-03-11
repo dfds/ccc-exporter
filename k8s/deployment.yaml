@@ -19,7 +19,7 @@ spec:
       #serviceAccountName: <TODO>
       containers:
         - name: app
-          image: 579478677147.dkr.ecr.eu-central-1.amazonaws.com/selfservice/ccc-exporter:latest
+          image: 579478677147.dkr.ecr.eu-central-1.amazonaws.com/selfservice/ccc-exporter:$(image-tag) #picked-up by the replace-tokens action
           ports:
             - name: metrics
               containerPort: 8888

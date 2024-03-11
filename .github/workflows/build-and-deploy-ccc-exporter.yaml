@@ -34,6 +34,14 @@ jobs:
         shell: bash
     steps:
     - uses: actions/checkout@v3
+    - name: 'Replace tokens in k8s manifests'
+      uses: cschleiden/replace-tokens@v1.1
+      with:
+        tokenPrefix: '$('
+        tokenSuffix: ')'
+        files: '["k8s/*.yml"]'
+      env:
+        image-tag: ${{steps.build_push_container_ecr.outputs.sha}}
     - uses: ./.github/actions/build_push_container_ecr
       with:
         dockerfile_path: Dockerfile
