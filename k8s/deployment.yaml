@@ -19,7 +19,7 @@ spec:
       #serviceAccountName: <TODO>
       containers:
         - name: app
-          image: 579478677147.dkr.ecr.eu-central-1.amazonaws.com/selfservice/ccc-exporter:sha-$(image_tag)
+          image: 642375522597.dkr.ecr.eu-west-1..amazonaws.com/selfservice/ccc-exporter:sha-$(image_tag)
           ports:
             - name: metrics
               containerPort: 8888
