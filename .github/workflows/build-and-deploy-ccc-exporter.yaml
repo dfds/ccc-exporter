@@ -41,7 +41,7 @@ jobs:
         tokenSuffix: ')'
         files: '["k8s/*.yaml"]'
       env:
-        image-tag: ${{steps.build_push_container_ecr.outputs.sha}}
+        image-tag: ${{ steps.build_push_container_ecr.outputs.sha }}
     - uses: ./.github/actions/build_push_container_ecr
       with:
         dockerfile_path: Dockerfile
