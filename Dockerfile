@@ -8,7 +8,7 @@ COPY go.sum ./
 COPY internal /app/internal
 COPY . /app/.
 
-RUN go build -o /app/client /app/cmd/main.go
+RUN go build -tags=viper_bind_struct -o /app/client /app/cmd/main.go
 
 FROM golang:1.21-alpine
 

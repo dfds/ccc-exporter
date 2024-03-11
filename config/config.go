@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"github.com/spf13/viper"
+	"strings"
 )
 
 type Worker struct {
@@ -41,6 +42,8 @@ func LoadConfig(configName string) (Config, error) {
 	viper.SetDefault("worker.intervalSeconds", 60)
 	viper.SetDefault("worker.daysToLookBack", 7)
 
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	viper.SetEnvPrefix("CCC")
 	// override with environment variables if any available
 	viper.AutomaticEnv()
 
