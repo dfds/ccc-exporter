@@ -39,7 +39,7 @@ jobs:
       with:
         tokenPrefix: '$('
         tokenSuffix: ')'
-        files: '["k8s/*.yml"]'
+        files: '["k8s/*.yaml"]'
       env:
         image-tag: ${{steps.build_push_container_ecr.outputs.sha}}
     - uses: ./.github/actions/build_push_container_ecr
