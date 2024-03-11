@@ -35,6 +35,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: ./.github/actions/build_push_container_ecr
+      id: build_push_container_ecr
       with:
         dockerfile_path: Dockerfile
         context_path: '.'
