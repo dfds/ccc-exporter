@@ -2,6 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: ccc-exporter
+  namespace: developerautomation-xavgy
 data:
   config.json: |
     {
