@@ -62,4 +62,4 @@ jobs:
         KUBECONFIG: '/tmp/kubeconfig'
         NAMESPACE: 'developerautomation-xavgy'
       run: |
-        kubectl apply -f k8s/deployment.yaml
+        kubectl apply -f k8s
