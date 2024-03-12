@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ccc-exporter
+data:
+  config.json: |
+    {
+      "worker": {
+        "intervalSeconds": 60,
+        "daysToLookBack": 7
+      },
+      "s3": {
+        "region": "eu-central-1"
+      }
+    }

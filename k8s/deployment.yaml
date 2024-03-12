@@ -33,3 +33,15 @@ spec:
           envFrom:
             - secretRef:
                 name: ccc-exporter-confluent-cloud-api-access
+          volumeMounts:
+            - name: ccc-exporter-config
+              mountPath: /app/config.json
+              subPath: config.json
+              readOnly: true
+      volumes:
+        - name: ccc-exporter-config
+          configMap:
+            name: ccc-exporter
+            items:
+              - key: config.json
+                path: config.json
