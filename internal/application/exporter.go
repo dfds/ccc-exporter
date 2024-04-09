@@ -2,12 +2,13 @@ package application
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/gofiber/fiber/v2/log"
 	"go.dfds.cloud/ccc-exporter/config"
 	"go.dfds.cloud/ccc-exporter/internal/client"
 	"go.dfds.cloud/ccc-exporter/internal/service"
 	"go.dfds.cloud/ccc-exporter/internal/util"
-	"time"
 )
 
 type ExportState string
@@ -72,78 +73,116 @@ func (e *ExporterApplication) SetupProcesses(checkS3 bool, daysToLookBack int) {
 	}
 }
 
+func (e *ExporterApplication) setProcesses(exportProcesses []ExportProcess) {
+	e.exportProcesses = exportProcesses
+}
+
+// TODO: the 4 following functions could be combined - do we need so many states?
+func (e *ExporterApplication) fetchCosts(dayTime util.YearMonthDayDate) bool {
+	if !e.costService.HasCostsForDate(dayTime) {
+		e.costService.FetchAndCacheCosts(dayTime)
+		if !e.costService.HasCostsForDate(dayTime) {
+			log.Errorf("unable to fetch costs for %s", dayTime)
+			return false
+		}
+	}
+	log.Infof("successfully found confluent costs for %s", dayTime)
+	return true
+}
+
+func (e *ExporterApplication) getPrometheusUsageData(dayTime util.YearMonthDayDate) bool {
+	_, err := e.gathererService.GetMetricsForDay(dayTime)
+	if err != nil {
+		log.Warnf("unable to get prometheus usage data for %s: %s", dayTime, err)
+		return false
+	}
+	log.Infof("successfully found prometheus usage data for %s", dayTime)
+	return true
+}
+
+func (e *ExporterApplication) writeToCsv(dayTime util.YearMonthDayDate) bool {
+	metricsData, err := e.gathererService.GetMetricsForDay(dayTime)
+	if err != nil {
+		return false
+	}
+	err = e.WriteCSV(metricsData)
+	if err != nil {
+		log.Errorf("unable to write csv for %s: %s", dayTime, err)
+		return false
+	}
+	log.Infof("successfully wrote csv for %s", dayTime)
+	return true
+}
+
+func (e *ExporterApplication) putCsvInS3(dayTime util.YearMonthDayDate, s3Config config.S3) bool {
+	data, err := e.ReadCsvRaw(dayTime)
+	if err != nil {
+		log.Errorf("unable to find csv locally %s", dayTime, err)
+		return false
+	}
+	err = e.s3Client.PutObject(s3Config.BucketName, fmt.Sprintf("%s/%s", s3Config.BucketKey, dayTime.ToFileNameFormat()), data)
+	if err != nil {
+		log.Errorf("unable to put csv in s3 for %s: %s", dayTime, err)
+		return false
+	}
+	log.Infof("successfully put csv in s3 for %s", dayTime)
+	return true
+}
+
+func (e *ExporterApplication) removeDoneProcesses(endedProcessesIndices []int) {
+	for id := range endedProcessesIndices {
+		e.setProcesses(append(e.exportProcesses[:id], e.exportProcesses[id+1:]...)) //all processes except for #i
+	}
+}
+
+func (e *ExporterApplication) executeProcessAndUpdateState(process ExportProcess, s3Config config.S3) bool {
+	//TODO: are so many states really necessary?
+	isDone := false
+	switch process.currentState {
+	case ExportStateNeedCosts:
+		if e.fetchCosts(process.dayTime) {
+			process.currentState = ExportStateNeedPrometheusUsageData
+		}
+
+	case ExportStateNeedPrometheusUsageData:
+		if e.getPrometheusUsageData(process.dayTime) {
+			process.currentState = ExportStateNeedLocalCSVExport
+		}
+	case ExportStateNeedLocalCSVExport:
+		if e.writeToCsv(process.dayTime) {
+			process.currentState = ExportStateNeedToPutCSVInS3
+		}
+	case ExportStateNeedToPutCSVInS3:
+		if e.putCsvInS3(process.dayTime, s3Config) {
+			process.currentState = ExportStateDone
+		}
+	case ExportStateDone:
+		isDone = true
+	}
+	return isDone
+}
+
+func (e *ExporterApplication) processesListFold(s3Config config.S3) {
+	ongoingProcesses := []ExportProcess{}
+	for _, process := range e.exportProcesses {
+		if !e.executeProcessAndUpdateState(process, s3Config) {
+			ongoingProcesses = append(ongoingProcesses, process)
+		}
+		//e.removeDoneProcesses(endedProcesses)
+	}
+	e.setProcesses(ongoingProcesses)
+}
+
 func (e *ExporterApplication) Work(config config.Worker, s3Config config.S3) {
 	sleepInterval, err := time.ParseDuration(fmt.Sprintf("%ds", config.IntervalSeconds))
 	if err != nil {
 		panic(err)
 	}
-
 	for {
 		if len(e.exportProcesses) == 0 {
 			e.SetupProcesses(config.CheckForExportedDataInS3, config.DaysToLookBack)
-			if len(e.exportProcesses) == 0 {
-				log.Infof("no more work to do, sleeping for %s", sleepInterval)
-				time.Sleep(sleepInterval)
-				continue
-			}
 		}
-
-		// TODO: Very messy state machine, should be refactored
-		for i, process := range e.exportProcesses {
-			switch process.currentState {
-			case ExportStateNeedCosts:
-				if !e.costService.HasCostsForDate(process.dayTime) {
-					e.costService.FetchAndCacheCosts(process.dayTime)
-					if !e.costService.HasCostsForDate(process.dayTime) {
-						log.Errorf("unable to fetch costs for %s", process.dayTime)
-						continue
-					}
-				}
-				log.Infof("successfully found confluent costs for %s", process.dayTime)
-				e.exportProcesses[i].currentState = ExportStateNeedPrometheusUsageData
-			case ExportStateNeedPrometheusUsageData:
-				_, err := e.gathererService.GetMetricsForDay(process.dayTime)
-				if err != nil {
-					log.Warnf("unable to get prometheus usage data for %s: %s", process.dayTime, err)
-					continue
-				}
-				log.Infof("successfully found prometheus usage data for %s", process.dayTime)
-				e.exportProcesses[i].currentState = ExportStateNeedLocalCSVExport
-			case ExportStateNeedLocalCSVExport:
-				metricsData, err := e.gathererService.GetMetricsForDay(process.dayTime)
-				if err != nil {
-					return
-				}
-				err = e.WriteCSV(metricsData)
-				if err != nil {
-					log.Errorf("unable to write csv for %s: %s", process.dayTime, err)
-					continue
-				}
-				log.Infof("successfully wrote csv for %s", process.dayTime)
-				e.exportProcesses[i].currentState = ExportStateNeedToPutCSVInS3
-			case ExportStateNeedToPutCSVInS3:
-				data, err := e.ReadCsvRaw(process.dayTime)
-				if err != nil {
-					log.Errorf("unable to find csv locally %s", process.dayTime, err)
-					continue
-				}
-				err = e.s3Client.PutObject(s3Config.BucketName, fmt.Sprintf("%s/%s", s3Config.BucketKey, process.dayTime.ToFileNameFormat()), data)
-				if err != nil {
-					log.Errorf("unable to put csv in s3 for %s: %s", process.dayTime, err)
-					continue
-				}
-				log.Infof("successfully put csv in s3 for %s", process.dayTime)
-				e.exportProcesses[i].currentState = ExportStateDone
-			case ExportStateDone:
-			}
-
-			// remove done processes
-			for i := len(e.exportProcesses) - 1; i >= 0; i-- {
-				if e.exportProcesses[i].currentState == ExportStateDone {
-					e.exportProcesses = append(e.exportProcesses[:i], e.exportProcesses[i+1:]...)
-				}
-			}
-		}
+		e.processesListFold(s3Config)
 		time.Sleep(sleepInterval)
 		log.Infof("woke up, checking for work")
 	}
