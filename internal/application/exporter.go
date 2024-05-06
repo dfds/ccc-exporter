@@ -32,7 +32,7 @@ type ExporterApplication struct {
 	costService     *service.ConfluentCostService
 	s3Client        *client.S3Client
 
-	exportProcesses []ExportProcess
+	exportProcesses []*ExportProcess
 }
 
 func NewExporterApplication(prometheusClient *client.PrometheusClient, confluentClient *client.ConfluentCloudClient, s3Client *client.S3Client) ExporterApplication {
@@ -47,7 +47,7 @@ func NewExporterApplication(prometheusClient *client.PrometheusClient, confluent
 // SetupProcesses setup fetch processes for days looking back by daysToLookBack
 // For now only checks local exports and not in s3
 func (e *ExporterApplication) SetupProcesses(checkS3 bool, daysToLookBack int) {
-	e.exportProcesses = []ExportProcess{}
+	e.exportProcesses = []*ExportProcess{}
 
 	var daysToExport []util.YearMonthDayDate
 	year, month, day := time.Now().UTC().Date()
@@ -66,14 +66,14 @@ func (e *ExporterApplication) SetupProcesses(checkS3 bool, daysToLookBack int) {
 		if e.HasExportedDataForDay(yearMonthDayDate) {
 			continue
 		}
-		e.exportProcesses = append(e.exportProcesses, ExportProcess{
+		e.exportProcesses = append(e.exportProcesses, &ExportProcess{
 			dayTime:      yearMonthDayDate,
 			currentState: ExportStateNeedCosts,
 		})
 	}
 }
 
-func (e *ExporterApplication) setProcesses(exportProcesses []ExportProcess) {
+func (e *ExporterApplication) setProcesses(exportProcesses []*ExportProcess) {
 	e.exportProcesses = exportProcesses
 }
 
@@ -135,7 +135,7 @@ func (e *ExporterApplication) removeDoneProcesses(endedProcessesIndices []int) {
 	}
 }
 
-func (e *ExporterApplication) executeProcessAndUpdateState(process ExportProcess, s3Config config.S3) bool {
+func (e *ExporterApplication) executeProcessAndUpdateState(process *ExportProcess, s3Config config.S3) bool {
 	//TODO: are so many states really necessary?
 	isDone := false
 	switch process.currentState {
@@ -163,7 +163,7 @@ func (e *ExporterApplication) executeProcessAndUpdateState(process ExportProcess
 }
 
 func (e *ExporterApplication) processesListFold(s3Config config.S3) {
-	ongoingProcesses := []ExportProcess{}
+	ongoingProcesses := []*ExportProcess{}
 	for _, process := range e.exportProcesses {
 		if !e.executeProcessAndUpdateState(process, s3Config) {
 			ongoingProcesses = append(ongoingProcesses, process)
