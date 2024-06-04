@@ -32,7 +32,7 @@ spec:
               cpu: "100m"
           env:
             - name: CCC_PROMETHEUS_ENDPOINT
-              value: "http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local"
+              value: "http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090"
             - name: CCC_WORKER_INTERVALSECONDS
               value: "5"
             - name: CCC_S3_BUCKETNAME
