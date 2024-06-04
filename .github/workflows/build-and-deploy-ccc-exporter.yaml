@@ -51,6 +51,8 @@ jobs:
         files: '["k8s/*.yaml"]'
       env:
         image_tag: ${{ steps.build_push_container_ecr.outputs.sha }}
+        S3_AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
     - run: 'echo "$KUBECONFIG" > /tmp/kubeconfig'
       shell: bash
       env:

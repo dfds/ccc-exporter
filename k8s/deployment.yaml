@@ -30,6 +30,15 @@ spec:
             limits:
               memory: "100Mi"
               cpu: "100m"
+          env:
+            - name: CCC_PROMETHEUS_ENDPOINT
+              value: "http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local"
+            - name: CCC_WORKER_INTERVALSECONDS
+              value: "5"
+            - name: CCC_S3_BUCKETNAME
+              value: "$(S3_BUCKET_NAME)"
+            - name: CCC_S3_BUCKETKEY
+              value: "prod"
           envFrom:
             - secretRef:
                 name: ccc-exporter-confluent-cloud-api-access
