@@ -137,6 +137,7 @@ func (e *ExporterApplication) removeDoneProcesses(endedProcessesIndices []int) {
 
 func (e *ExporterApplication) executeProcessAndUpdateState(process *ExportProcess, s3Config config.S3) bool {
 	//TODO: are so many states really necessary?
+	fmt.Printf("Processing entry '%s', current state: %s\n", process.dayTime.String(), process.currentState)
 	isDone := false
 	switch process.currentState {
 	case ExportStateNeedCosts:
@@ -181,6 +182,10 @@ func (e *ExporterApplication) Work(config config.Worker, s3Config config.S3) {
 	for {
 		if len(e.exportProcesses) == 0 {
 			e.SetupProcesses(config.CheckForExportedDataInS3, config.DaysToLookBack)
+		}
+		fmt.Println("eventProcesses")
+		for _, proc := range e.exportProcesses {
+			fmt.Printf("%s - %v\n", proc.currentState, proc.dayTime.String())
 		}
 		e.processesListFold(s3Config)
 		time.Sleep(sleepInterval)

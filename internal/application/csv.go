@@ -7,10 +7,13 @@ import (
 	"go.dfds.cloud/ccc-exporter/internal/util"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 )
 import "encoding/csv"
 
 const CostsExportDir = "export"
+const UnknownPlaceholder = "UNKNOWN"
 
 func (e *ExporterApplication) EnsureCSVDataFolderExists() error {
 	err := os.MkdirAll(CostsExportDir, 0755)
@@ -22,6 +25,7 @@ func (e *ExporterApplication) EnsureCSVDataFolderExists() error {
 
 func calcCost(m model.MetricData, costs model.KafkaConfluentCost) float64 {
 	inGB := m.Value / 1024 / 1024 / 1024
+	fmt.Printf("%s\n", costs.CostType)
 	switch costs.CostUnit {
 	case model.GB:
 		return inGB * costs.CostPerUnit
@@ -34,7 +38,7 @@ func calcCost(m model.MetricData, costs model.KafkaConfluentCost) float64 {
 	return 0
 }
 
-func (e *ExporterApplication) TryAddLine(writer *csv.Writer, data model.MetricsDataForDay, clusterId model.ClusterId, metricsKey model.MetricKey) {
+func (e *ExporterApplication) TryAddLine(writer *csv.Writer, data model.MetricsDataForDay, clusterId model.ClusterId, pattern *regexp.Regexp, metricsKey model.MetricKey) {
 	metricData, ok := data.Topics[metricsKey][clusterId]
 	if !ok {
 		log.Warnf("No data found for cluster %s and metric %s", clusterId, metricsKey)
@@ -48,11 +52,30 @@ func (e *ExporterApplication) TryAddLine(writer *csv.Writer, data model.MetricsD
 	}
 
 	for topic, m := range metricData {
+		capabilityRootId := pattern.FindStringSubmatch(string(topic))
+		capability := "UNKNOWN"
+
+		if len(capabilityRootId) > 2 { // matching pattern of Capability rootid
+			capability = capabilityRootId[2]
+			if strings.Contains(capabilityRootId[2], "_confluent-ksql") {
+				capability = UnknownPlaceholder
+			}
+		}
+
 		err = writer.Write([]string{
 			data.DayDate.ToCSVString(),
-			fmt.Sprintf("%s-%s-%s", clusterId, topic, metricsKey.ToCsvFormatString()),
 			fmt.Sprintf("%f", calcCost(m, costs)),
+			string(topic),
+			string(clusterId),
+			metricsKey.ToCsvFormatString(),
+			capability,
 		})
+
+		//key := fmt.Sprintf("%s-%s-%s", clusterId, topic, metricsKey.ToCsvFormatString())
+		//cost := calcCost(m, costs)
+		//if strings.Contains(key, "lkc-4npj6-dataplatform-ajamn.ft-unithandling-phx-source-written-bytes") || strings.Contains(key, "lkc-4npj6-onboardcustomers-npxkm.customerbookings-internal-prod-written-bytes") {
+		//	fmt.Printf("key: %s\ncost: %f\n", key, cost)
+		//}
 	}
 }
 
@@ -86,15 +109,23 @@ func (e *ExporterApplication) WriteCSV(data model.MetricsDataForDay) error {
 
 	writer := csv.NewWriter(dataFile)
 	defer writer.Flush()
-	headers := []string{"UsageDate", "ServiceName", "Cost"}
+
+	pattern, err := regexp.Compile("(pub.)?(.*-.{5})\\.")
+	if err != nil {
+		return err
+	}
+
+	// new headers: Date,Cost,Name,Action,Capability
+	//headers := []string{"Date", "ServiceName", "Cost"}
+	headers := []string{"Date", "Cost", "Name", "ClusterId", "Action", "Capability"}
 	err = writer.Write(headers)
 	if err != nil {
 		return err
 	}
 	for _, clusterId := range model.ConfluentClusters {
-		e.TryAddLine(writer, data, clusterId, model.ConfluentKafkaServerReceivedBytes)
-		e.TryAddLine(writer, data, clusterId, model.ConfluentKafkaServerSentBytes)
-		e.TryAddLine(writer, data, clusterId, model.ConfluentKafkaServerRetainedBytes)
+		e.TryAddLine(writer, data, clusterId, pattern, model.ConfluentKafkaServerReceivedBytes)
+		e.TryAddLine(writer, data, clusterId, pattern, model.ConfluentKafkaServerSentBytes)
+		e.TryAddLine(writer, data, clusterId, pattern, model.ConfluentKafkaServerRetainedBytes)
 	}
 
 	return nil
