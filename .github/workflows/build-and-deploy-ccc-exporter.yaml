@@ -1,17 +1,6 @@
 name: ccc-exporter - deploy / build
 
 on:
-  push:
-    branches:
-      - 'master'
-    paths:
-      - 'cmd/**'
-      - 'config/**'
-      - 'internal/**'
-      - 'export/**'
-      - 'Dockerfile'
-      - 'k8s/**'
-      - '.github/workflows/build-and-deploy-ccc-exporter.yaml'
   workflow_dispatch:
     inputs:
       deploy:
